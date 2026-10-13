@@ -53,7 +53,7 @@ Send the page's address, <https://davidluttrull.github.io/grace-music/>. Each vo
 
 ## Editing the Sheet
 
-Gray names come from the Rotation tab. To change one week, click the cell and pick a name from its dropdown, or type over it. The cell turns bold on yellow so you can see what you changed. Typing over a gray name only affects that one cell; the rest of the month still follows the rotation.
+Gray names come from the Rotation tab. To change one week, type a name over it. The cell turns bold on yellow so you can see what you changed. Typing over a gray name only affects that one cell; the rest of the month still follows the rotation.
 
 The **Music Schedule** menu (it appears a few seconds after the Sheet opens) has two items:
 
@@ -62,7 +62,6 @@ The **Music Schedule** menu (it appears a few seconds after the Sheet opens) has
 
 The first time you use the menu, Google asks for permission the same way it did in step 2.
 
-- **Dropdowns:** the name list is the **People** column on the Rotation tab. It builds itself from the rotation names. To add someone who isn't in the rotation (a sub, a college student, a soloist), type their name in the yellow **Other people** column next to it. The dropdown still accepts names that aren't on the list, such as two people joined with &. Those cells get a small red warning mark in the corner, which you can ignore.
 - **Names:** type full names ("Eloise Foote") when you can. The page also recognizes the short forms you've used before, such as "E Foote" or "Eliana W". Several people in one cell can be separated by &, a comma, or /.
 - **Offering and Special** can hold any text, such as "Men's Quartet (David Luttrull Lead)". Anyone named in it gets that date in My dates.
 - Don't rename the service labels (Sunday AM, Sunday PM, Wednesday) or the "Week" rows. The script uses them to find each block.
