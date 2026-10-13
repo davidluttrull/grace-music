@@ -5,7 +5,7 @@ Volunteers open a web page on their phones, type their name, and see the dates t
 It has two parts:
 
 - **The script** (`Code.gs`). It lives inside the **Music Schedule 2026** Google Sheet and hands the page the upcoming services. It reads only the month tabs. The Rotation and Away tabs are never sent, so nobody sees who's out of town.
-- **The page** (`index.html`, plus the logo, icons, and `manifest.webmanifest`). It's hosted on GitHub Pages, the same way as the attendance page.
+- **The page** (`index.html`, plus the logo, icons, and `manifest.webmanifest`). It's hosted on GitHub Pages at <https://davidluttrull.github.io/grace-music/>, the same way as the attendance page.
 
 Volunteers don't need a Google account. Anyone with the link can see the schedule, which is the same as sharing the Google Doc by link today.
 
@@ -39,7 +39,7 @@ You only do this once. Deploying a new version of the script later keeps the sam
 
 ## 4. Share it with volunteers
 
-Send the page's address. Each volunteer types their name once, and the phone remembers it. Saving the page to the home screen adds a **Music** icon:
+Send the page's address, <https://davidluttrull.github.io/grace-music/>. Each volunteer types their name once, and the phone remembers it. Saving the page to the home screen adds a **Music** icon:
 
 - **iPhone:** open the link in Safari, tap Share, then **Add to Home Screen**.
 - **Android:** open the link in Chrome, tap **⋮**, then **Add to Home screen**.
