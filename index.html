@@ -325,8 +325,8 @@
   <div class="bar">
     <div class="bar-inner">
       <div class="seg" role="group" aria-label="View">
-        <button type="button" id="viewMine" aria-pressed="true">My dates</button>
-        <button type="button" id="viewAll" aria-pressed="false">All services</button>
+        <button type="button" id="viewMine" aria-pressed="true">My Dates</button>
+        <button type="button" id="viewAll" aria-pressed="false">All Services</button>
       </div>
       <div class="filters" id="filters" role="group" aria-label="Service" hidden></div>
     </div>
@@ -393,7 +393,7 @@
   let services = [];
   let updated = '';
   let filter = 'All';
-  let mine = [];              // My dates entries, in the order shown
+  let mine = [];              // My Dates entries, in the order shown
   const openKeys = new Set(); // dates left open, kept open when the list redraws
 
   function esc(s) {
@@ -555,7 +555,7 @@
     }).filter((x) => x.roles.length);
     if (!mine.length) {
       $('#mineList').innerHTML = '<p class="empty"><b>No dates found for ' + esc(me) + '</b>' +
-        'Check the spelling, or look under All services.</p>';
+        'Check the spelling, or look under All Services.</p>';
       return;
     }
     let html = '<button type="button" class="act allcal" data-act="ics">Add all my dates to my calendar</button>';
