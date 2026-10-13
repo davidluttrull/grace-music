@@ -1,6 +1,6 @@
 # Music Schedule: Setup
 
-Volunteers open a web page on their phones, type their name, and see the dates they're serving. They can also browse every upcoming service, with the songs, choir, and media team.
+Volunteers open a web page on their phones, type their name, and see the dates they're serving. They can also browse every upcoming service, with the songs, music team, Cong. Singers, and media team.
 
 It has two parts:
 
@@ -46,7 +46,7 @@ Send the page's address, <https://davidluttrull.github.io/grace-music/>. Each vo
 
 ## How it works
 
-- **My dates** lists every upcoming service where the volunteer's name appears, with their roles ("Synth", "Choir alto", "Slides"). Tapping a date opens the full service.
+- **My dates** lists every upcoming service where the volunteer's name appears, with their roles ("Synth", "Cong. Singers alto", "Slides"). Tapping a date opens the full service.
 - **All services** shows every upcoming service as a card, with buttons to show only Sunday AM, Sunday PM, or Wednesday. The volunteer's own name is highlighted.
 - Services stay on the page through the day after they happen, so Sunday night still shows Sunday.
 - The page loads fresh data every time it opens, so edits to the Sheet show up right away. If a phone has no signal, it shows the last copy it loaded and says so.
