@@ -24,7 +24,7 @@ Volunteers don't need a Google account. Anyone with the link can see the schedul
    - **Description:** `v1`
    - **Execute as:** **Me**
    - **Who has access:** **Anyone**
-4. Click **Deploy**. Google asks for permission the first time: click **Review permissions**, pick your account, then **Advanced → Go to Music Schedule (unsafe) → Allow**. The warning appears because you wrote the script yourself. It only asks to read your spreadsheets.
+4. Click **Deploy**. Google asks for permission the first time: click **Review permissions**, pick your account, then **Advanced → Go to Music Schedule (unsafe) → Allow**. The warning appears because you wrote the script yourself. It asks for access to your spreadsheets, which the Music Schedule menu uses to fill in names.
 5. Copy the **Web app URL**. It ends in `/exec`.
 
 To check it, open that URL on your phone. You should see text that starts with `{"services":`. (Your Mac's browser has refused to open these script links before, so use the phone.)
@@ -53,11 +53,20 @@ Send the page's address, <https://davidluttrull.github.io/grace-music/>. Each vo
 
 ## Editing the Sheet
 
-- **New month:** duplicate a month tab and change the date in B1, the same as before. The page finds it on its own. You don't need to redeploy. The script treats any tab with "Month" in A1 as a month tab.
+Gray names come from the Rotation tab. To change one week, click the cell and pick a name from its dropdown, or type over it. The cell turns bold on yellow so you can see what you changed. Typing over a gray name only affects that one cell; the rest of the month still follows the rotation.
+
+The **Music Schedule** menu (it appears a few seconds after the Sheet opens) has two items:
+
+- **Reset selected cells to rotation:** select one or more cells you changed and click this to bring back the rotation names. You can select a whole block, or the whole tab; song, offering, special, and notes cells are left alone.
+- **Add next month:** makes the next month's tab (for example **Jan 2027**) right after the latest one. Its dates fill in, every name comes from the rotation, and songs and notes start blank. The page finds the new tab on its own; you don't need to redeploy.
+
+The first time you use the menu, Google asks for permission the same way it did in step 2.
+
+- **Dropdowns:** the name list is the **People** column on the Rotation tab. It builds itself from the rotation names. To add someone who isn't in the rotation (a sub, a college student, a soloist), type their name in the yellow **Other people** column next to it. The dropdown still accepts names that aren't on the list, such as two people joined with &. Those cells get a small red warning mark in the corner, which you can ignore.
 - **Names:** type full names ("Eloise Foote") when you can. The page also recognizes the short forms you've used before, such as "E Foote" or "Eliana W". Several people in one cell can be separated by &, a comma, or /.
 - **Offering and Special** can hold any text, such as "Men's Quartet (David Luttrull Lead)". Anyone named in it gets that date in My dates.
 - Don't rename the service labels (Sunday AM, Sunday PM, Wednesday) or the "Week" rows. The script uses them to find each block.
 
 ## Updating the script
 
-When `Code.gs` changes, paste the new version into Apps Script and save. Then click **Deploy → Manage deployments**, click the pencil icon, choose **New version** under Version, and click **Deploy**. Don't use **New deployment**, because that creates a new URL and the page would stop reaching the script.
+When `Code.gs` changes, paste the new version into Apps Script and save, then reload the Sheet. That's all the menu needs. If the change touches what the page shows (the `doGet` part), also click **Deploy → Manage deployments**, click the pencil icon, choose **New version** under Version, and click **Deploy**. Don't use **New deployment**, because that creates a new URL and the page would stop reaching the script.
