@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grace Music Schedule</title>
+<meta name="description" content="Who's serving in music and media at Grace Baptist Church, and when.">
+<meta name="theme-color" content="#233617">
+<meta name="apple-mobile-web-app-title" content="Music">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand: #7BAE58;
+    --brand-deep: #233617;
+    --brand-mid: #4E7A35;
+    --bg: #F3F8EF;
+    --card: #FFFFFF;
+    --ink: #1E2A16;
+    --muted: #5B6A50;
+    --line: #DCE7D3;
+    --tint: #EFF6EA;
+    --tint-line: #C6DBB6;
+    --seg-on-bg: #233617;
+    --seg-on-ink: #FFFFFF;
+    --mark-bg: #FFF2CC;
+    --mark-ink: #4A3500;
+    --danger: #B3261E;
+    --shadow: 0 1px 2px rgba(35, 54, 23, .06), 0 2px 8px rgba(35, 54, 23, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10160C;
+      --card: #1A2414;
+      --ink: #E8F0E1;
+      --muted: #A3B396;
+      --line: #2D3B24;
+      --tint: #243319;
+      --tint-line: #3A4D2E;
+      --seg-on-bg: #7BAE58;
+      --seg-on-ink: #10160C;
+      --mark-bg: #4A3B12;
+      --mark-ink: #FFE7A3;
+      --danger: #F2B8B5;
+      --shadow: none;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.4 'Poppins', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  .top {
+    background: var(--brand-deep);
+    color: #fff;
+    padding: 16px 16px 14px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    text-align: center;
+  }
+  .top img { height: 44px; display: block; margin: 0 auto 4px; }
+  .top p { margin: 0; font-size: 14px; color: #CFE3C0; letter-spacing: .02em; }
+
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg);
+    padding: 10px 16px 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .bar-inner { max-width: 560px; margin: 0 auto; }
+  .seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--tint);
+    border: 1px solid var(--tint-line);
+    border-radius: 12px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .seg button {
+    border: 0;
+    background: transparent;
+    border-radius: 9px;
+    min-height: 40px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--seg-on-bg); color: var(--seg-on-ink); }
+
+  .filters { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters button {
+    flex: none;
+    border: 1px solid var(--tint-line);
+    background: var(--card);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .filters button[aria-pressed="true"] { background: var(--seg-on-bg); border-color: var(--seg-on-bg); color: var(--seg-on-ink); }
+
+  main { max-width: 560px; margin: 0 auto; padding: 12px 16px 48px; }
+
+  .who label { display: block; font-size: 13px; color: var(--muted); margin: 2px 0 4px; }
+  .who-row { display: flex; gap: 8px; }
+  .who input {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    font-size: 16px;
+  }
+  .who button {
+    border: 1px solid var(--line);
+    background: var(--card);
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 14px;
+  }
+  input:focus, button:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .card-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  .card-head .when { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    background: var(--tint);
+    color: var(--brand-mid);
+    border: 1px solid var(--tint-line);
+    border-radius: 6px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: 1px;
+  }
+  @media (prefers-color-scheme: dark) { .badge { color: var(--brand); } }
+
+  .sec { padding: 8px 14px 10px; }
+  .sec + .sec { border-top: 1px solid var(--line); }
+  .sec h3 {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--brand-mid);
+  }
+  @media (prefers-color-scheme: dark) { .sec h3 { color: var(--brand); } }
+  .grid {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    column-gap: 12px;
+    row-gap: 2px;
+    margin: 0;
+    font-size: 14px;
+  }
+  .grid dt { color: var(--muted); font-size: 13px; padding-top: 1px; }
+  .grid dd { margin: 0; overflow-wrap: anywhere; }
+  .songs { margin: 0; padding: 0; list-style: none; font-size: 14px; }
+  .songs li { padding: 1px 0; }
+  .songs li.closing { color: var(--muted); }
+  .songs li.closing span { color: var(--ink); }
+  mark { background: var(--mark-bg); color: var(--mark-ink); border-radius: 4px; padding: 0 3px; font-weight: 600; }
+
+  .mine { list-style: none; margin: 12px 0 0; padding: 0; }
+  .mine li { margin-bottom: 8px; }
+  .mine details {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .mine summary {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 52px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+  }
+  .mine summary::-webkit-details-marker { display: none; }
+  .day {
+    text-align: center;
+    background: var(--tint);
+    border: 1px solid var(--tint-line);
+    border-radius: 10px;
+    padding: 4px 0;
+    line-height: 1.1;
+  }
+  .day b { display: block; font-size: 20px; font-weight: 600; }
+  .day small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .what b { display: block; font-weight: 600; font-size: 15px; }
+  .what span { font-size: 13px; color: var(--muted); }
+  .chev { color: var(--muted); transition: transform .15s; font-size: 18px; }
+  details[open] .chev { transform: rotate(90deg); }
+  .mine .card { border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; margin: 0; }
+  .mine .card-head { display: none; }
+
+  .month { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin: 16px 2px 6px; }
+  .month:first-child { margin-top: 4px; }
+  #mineList .month:first-child { margin-top: 14px; }
+  .empty { text-align: center; color: var(--muted); padding: 28px 12px; font-size: 14px; }
+  .empty b { display: block; color: var(--ink); font-size: 15px; margin-bottom: 4px; }
+  .foot { text-align: center; font-size: 12px; color: var(--muted); margin-top: 20px; }
+  .foot button { border: 0; background: none; color: var(--brand-mid); font-size: 12px; font-weight: 600; padding: 4px; text-decoration: underline; }
+  @media (prefers-color-scheme: dark) { .foot button { color: var(--brand); } }
+  .error { color: var(--danger); }
+</style>
+</head>
+<body>
+  <header class="top">
+    <img src="logo.png" alt="Grace Baptist Church">
+    <p>Music and media schedule</p>
+  </header>
+
+  <div class="bar">
+    <div class="bar-inner">
+      <div class="seg" role="group" aria-label="View">
+        <button type="button" id="viewMine" aria-pressed="true">My dates</button>
+        <button type="button" id="viewAll" aria-pressed="false">All services</button>
+      </div>
+      <div class="filters" id="filters" role="group" aria-label="Service" hidden></div>
+    </div>
+  </div>
+
+  <main>
+    <section id="mine">
+      <div class="who">
+        <label for="name">Your name</label>
+        <div class="who-row">
+          <input id="name" list="names" autocomplete="off" autocapitalize="words" placeholder="Start typing your name">
+          <button type="button" id="clearName" hidden>Clear</button>
+        </div>
+        <datalist id="names"></datalist>
+      </div>
+      <div id="mineList"></div>
+    </section>
+
+    <section id="all" hidden></section>
+
+    <p class="foot" id="foot"></p>
+  </main>
+
+<script>
+  // The Apps Script web app URL (Deploy > Manage deployments). It stays the
+  // same when a new version is deployed. Leave it empty to preview the page
+  // with sample.json from this folder.
+  const API_URL = '';
+  const NAME_KEY = 'gbc-music-name';
+  const VIEW_KEY = 'gbc-music-view';
+  const DATA_KEY = 'gbc-music-data';
+
+  const SERVICE_LABEL = { 'Sunday AM': 'Sunday morning', 'Sunday PM': 'Sunday evening', 'Wednesday': 'Wednesday evening' };
+  const SERVICE_SHORT = { 'Sunday AM': 'AM', 'Sunday PM': 'PM', 'Wednesday': 'Wed' };
+  // Rows in these sections hold song titles and notes, not people.
+  const NOT_PEOPLE = ['Songs'];
+  const FREE_TEXT_ROLES = ['Offering', 'Special'];
+
+  const $ = (sel) => document.querySelector(sel);
+  let services = [];
+  let updated = '';
+  let filter = 'All';
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function store(fn) {
+    try { return fn(window.localStorage); } catch (e) { return null; }
+  }
+
+  // ---------- Dates ----------
+  function parseDate(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function todayStart() {
+    const t = new Date();
+    return new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  }
+  function relDay(key) {
+    const days = Math.round((parseDate(key) - todayStart()) / 86400000);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Tomorrow';
+    if (days === -1) return 'Yesterday';
+    if (days > 1 && days < 7) return 'In ' + days + ' days';
+    return '';
+  }
+  const fmt = (key, opts) => parseDate(key).toLocaleDateString('en-US', opts);
+
+  // ---------- Names ----------
+  // A cell can hold several people: "Isabel Bott & Eliana Worsham",
+  // "Carrie Warner, Amber Foote", "Amber Foote / Becca Luttrull".
+  function splitNames(value) {
+    return value
+      .replace(/[()]/g, ' ')
+      .split(/\s*(?:&|,|\/|\+|\band\b)\s*/i)
+      .map((s) => s.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+  }
+  const norm = (s) => s.toLowerCase().replace(/[.']/g, '').replace(/\s+/g, ' ').trim();
+
+  // "E Foote" and "Eliana W" are how short names get typed into the sheet;
+  // count them as the same person when the initial and the other name agree.
+  function sameName(token, me) {
+    const a = norm(token).split(' ');
+    const b = norm(me).split(' ');
+    if (a.join(' ') === b.join(' ')) return true;
+    if (a.length !== 2 || b.length < 2) return false;
+    const first = b[0], last = b[b.length - 1];
+    if (a[0].length === 1 && a[0] === first[0] && a[1] === last) return true;
+    if (a[1].length === 1 && a[0] === first && a[1] === last[0]) return true;
+    return false;
+  }
+
+  function isMine(item, me) {
+    if (!me || NOT_PEOPLE.includes(item.section) || item.role === 'Notes') return false;
+    const tokens = splitNames(item.value);
+    if (tokens.some((t) => sameName(t, me))) return true;
+    if (!FREE_TEXT_ROLES.includes(item.role)) return false;
+    // "Men's Quartet (David Luttrull Lead)", "Duet (David L & Jenn L)":
+    // look for the name anywhere in the phrase.
+    return tokens.some((t) => {
+      const w = t.split(' ');
+      for (let i = 0; i + 1 < w.length; i++) if (sameName(w[i] + ' ' + w[i + 1], me)) return true;
+      return false;
+    });
+  }
+
+  function allNames() {
+    const seen = new Map();
+    services.forEach((s) => s.items.forEach((it) => {
+      if (NOT_PEOPLE.includes(it.section) || it.section === 'Service') return;
+      splitNames(it.value).forEach((n) => {
+        // Full names only; "E Foote" style shorthand would clutter the list.
+        if (!/^[A-Za-z][A-Za-z'.-]+( [A-Za-z][A-Za-z'.-]+)+$/.test(n)) return;
+        if (n.split(' ').some((p) => p.replace('.', '').length === 1)) return;
+        if (!seen.has(norm(n))) seen.set(norm(n), n);
+      });
+    }));
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }
+
+  // ---------- Rendering ----------
+  function highlight(value, me) {
+    if (!me) return esc(value);
+    const parts = value.split(/(\s*(?:&|,|\/|\+)\s*)/);
+    return parts.map((p) => (splitNames(p).some((t) => sameName(t, me)) ? '<mark>' + esc(p) + '</mark>' : esc(p))).join('');
+  }
+
+  function roleLabel(item) {
+    if (item.section === 'Choir') return item.role === 'Extras' ? 'Choir' : 'Choir ' + item.role.toLowerCase();
+    if (item.role === 'Leading') return 'Leading singing';
+    if (item.role === 'Special') return 'Special: ' + item.value;
+    return item.role;
+  }
+
+  function serviceBody(svc, me) {
+    const groups = [];
+    svc.items.forEach((it) => {
+      let g = groups[groups.length - 1];
+      if (!g || g.section !== it.section) groups.push(g = { section: it.section, items: [] });
+      g.items.push(it);
+    });
+    if (!groups.length) return '<div class="sec"><p class="empty" style="padding:8px 0">Nothing scheduled yet.</p></div>';
+    return groups.map((g) => {
+      let body;
+      if (g.section === 'Songs') {
+        body = '<ul class="songs">' + g.items.map((it) => it.role === 'Closing'
+          ? '<li class="closing">Closing: <span>' + esc(it.value) + '</span></li>'
+          : '<li>' + esc(it.value) + '</li>').join('') + '</ul>';
+      } else {
+        body = '<dl class="grid">' + g.items.map((it) =>
+          '<dt>' + esc(it.role) + '</dt><dd>' + highlight(it.value, me) + '</dd>').join('') + '</dl>';
+      }
+      return '<div class="sec"><h3>' + esc(g.section) + '</h3>' + body + '</div>';
+    }).join('');
+  }
+
+  function serviceCard(svc, me, isNext) {
+    const rel = relDay(svc.date);
+    return '<article class="card">' +
+      '<div class="card-head"><h2>' + esc(fmt(svc.date, { weekday: 'short', month: 'short', day: 'numeric' })) +
+      ' &middot; ' + esc(SERVICE_SHORT[svc.service] || svc.service) +
+      (isNext ? '<span class="badge">Next</span>' : '') + '</h2>' +
+      '<span class="when">' + esc(rel) + '</span></div>' +
+      serviceBody(svc, me) + '</article>';
+  }
+
+  function renderAll() {
+    const me = currentName();
+    const list = services.filter((s) => filter === 'All' || s.service === filter);
+    if (!list.length) {
+      $('#all').innerHTML = '<p class="empty"><b>Nothing scheduled yet</b>Check back after the next schedule is posted.</p>';
+      return;
+    }
+    let html = '', month = '';
+    list.forEach((s, i) => {
+      const m = fmt(s.date, { month: 'long', year: 'numeric' });
+      if (m !== month) { html += '<div class="month">' + esc(m) + '</div>'; month = m; }
+      html += serviceCard(s, me, i === 0);
+    });
+    $('#all').innerHTML = html;
+  }
+
+  function renderMine() {
+    const me = currentName();
+    $('#clearName').hidden = !me;
+    if (!me) {
+      $('#mineList').innerHTML = services.length
+        ? '<p class="empty"><b>See just your dates</b>Type your name above, or pick it from the list.</p>'
+        : '';
+      return;
+    }
+    const mine = services
+      .map((s) => ({ s, roles: s.items.filter((it) => isMine(it, me)).map(roleLabel) }))
+      .filter((x) => x.roles.length);
+    if (!mine.length) {
+      $('#mineList').innerHTML = '<p class="empty"><b>No dates found for ' + esc(me) + '</b>' +
+        'Check the spelling, or look under All services.</p>';
+      return;
+    }
+    let html = '', month = '';
+    html += '<ul class="mine">';
+    mine.forEach(({ s, roles }) => {
+      const m = fmt(s.date, { month: 'long', year: 'numeric' });
+      if (m !== month) { html += '</ul><div class="month">' + esc(m) + '</div><ul class="mine">'; month = m; }
+      const rel = relDay(s.date);
+      html += '<li><details><summary>' +
+        '<div class="day"><b>' + parseDate(s.date).getDate() + '</b><small>' + esc(fmt(s.date, { weekday: 'short' })) + '</small></div>' +
+        '<div class="what"><b>' + esc([...new Set(roles)].join(', ')) + '</b><span>' +
+        esc(SERVICE_LABEL[s.service] || s.service) + (rel ? ' &middot; ' + esc(rel) : '') + '</span></div>' +
+        '<span class="chev" aria-hidden="true">&rsaquo;</span></summary>' +
+        serviceCard(s, me, false) + '</details></li>';
+    });
+    html += '</ul>';
+    $('#mineList').innerHTML = html.replace('<ul class="mine"></ul>', '');
+  }
+
+  function renderFilters() {
+    const kinds = ['All', ...Object.keys(SERVICE_LABEL).filter((k) => services.some((s) => s.service === k))];
+    $('#filters').innerHTML = kinds.map((k) =>
+      '<button type="button" data-k="' + esc(k) + '" aria-pressed="' + (k === filter) + '">' + esc(k) + '</button>').join('');
+  }
+
+  function renderFoot(msg, isError) {
+    const when = updated ? new Date(updated).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    $('#foot').innerHTML = (msg ? '<span class="' + (isError ? 'error' : '') + '">' + esc(msg) + '</span><br>' : '') +
+      (when ? 'Updated ' + esc(when) + ' ' : '') + '<button type="button" id="refresh">Refresh</button>';
+    $('#refresh').onclick = load;
+  }
+
+  function render() {
+    const names = allNames();
+    $('#names').innerHTML = names.map((n) => '<option value="' + esc(n) + '">').join('');
+    renderFilters();
+    renderMine();
+    renderAll();
+  }
+
+  // ---------- State ----------
+  function currentName() { return $('#name').value.trim(); }
+
+  function setView(v) {
+    const all = v === 'all';
+    $('#viewAll').setAttribute('aria-pressed', all);
+    $('#viewMine').setAttribute('aria-pressed', !all);
+    $('#all').hidden = !all;
+    $('#filters').hidden = !all;
+    $('#mine').hidden = all;
+    store((s) => s.setItem(VIEW_KEY, v));
+  }
+
+  async function load() {
+    if (!API_URL && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+      renderFoot('The schedule isn’t connected yet. Check back soon.');
+      return;
+    }
+    renderFoot('Loading…');
+    try {
+      const r = await fetch(API_URL || 'sample.json', { cache: 'no-store' });
+      const res = await r.json();
+      if (res.status === 'error') throw new Error(res.message);
+      services = res.services || [];
+      updated = res.updated || '';
+      store((s) => s.setItem(DATA_KEY, JSON.stringify(res)));
+      render();
+      renderFoot('');
+    } catch (e) {
+      renderFoot(services.length
+        ? 'Couldn’t reach the schedule, so this may be out of date.'
+        : 'Couldn’t load the schedule. Check your connection and refresh.', true);
+    }
+  }
+
+  $('#viewMine').onclick = () => setView('mine');
+  $('#viewAll').onclick = () => setView('all');
+  $('#filters').onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    filter = b.dataset.k;
+    renderFilters();
+    renderAll();
+  };
+  $('#name').addEventListener('input', () => {
+    store((s) => s.setItem(NAME_KEY, currentName()));
+    renderMine();
+    renderAll();
+  });
+  $('#clearName').onclick = () => {
+    $('#name').value = '';
+    store((s) => s.removeItem(NAME_KEY));
+    renderMine();
+    renderAll();
+    $('#name').focus();
+  };
+
+  // Show the last copy right away, then fetch a fresh one.
+  $('#name').value = store((s) => s.getItem(NAME_KEY)) || '';
+  setView(store((s) => s.getItem(VIEW_KEY)) || 'mine');
+  try {
+    const cached = JSON.parse(store((s) => s.getItem(DATA_KEY)) || 'null');
+    if (cached && cached.services) { services = cached.services; updated = cached.updated || ''; render(); }
+  } catch (e) { /* ignore a bad cache */ }
+  load();
+</script>
+</body>
+</html>
