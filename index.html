@@ -29,6 +29,8 @@
     --seg-on-ink: #FFFFFF;
     --mark-bg: #FFF2CC;
     --mark-ink: #4A3500;
+    --out-bg: #FCE4E4;
+    --out-ink: #9B1C1C;
     --danger: #B3261E;
     --shadow: 0 1px 2px rgba(35, 54, 23, .06), 0 2px 8px rgba(35, 54, 23, .06);
   }
@@ -45,6 +47,8 @@
       --seg-on-ink: #10160C;
       --mark-bg: #4A3B12;
       --mark-ink: #FFE7A3;
+      --out-bg: #4A1F1F;
+      --out-ink: #F7C1C1;
       --danger: #F2B8B5;
       --shadow: none;
     }
@@ -231,6 +235,72 @@
   .chev { color: var(--muted); transition: transform .15s; font-size: 18px; }
   details[open] .chev { transform: rotate(90deg); }
   .mine .card { border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; margin: 0; }
+  .pill-out {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--out-ink);
+    background: var(--out-bg);
+    border-radius: 6px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: 2px;
+  }
+  details.is-out .day { background: var(--out-bg); border-color: transparent; color: var(--out-ink); }
+  details.is-out .day small { color: var(--out-ink); }
+
+  .acts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--tint);
+  }
+  .act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--tint-line);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .act.warn { color: var(--out-ink); }
+  .act.primary { background: var(--seg-on-bg); border-color: var(--seg-on-bg); color: var(--seg-on-ink); }
+  .act:disabled { opacity: .6; cursor: default; }
+  .acts .note { font-size: 13px; color: var(--out-ink); font-weight: 500; flex: 1 1 180px; }
+  .acts .err { font-size: 13px; color: var(--danger); flex-basis: 100%; }
+  .allcal { width: 100%; margin-top: 12px; }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: rgba(16, 22, 12, .5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .sheet {
+    width: 100%;
+    max-width: 380px;
+    background: var(--card);
+    border-radius: 16px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+  }
+  .sheet h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
+  .sheet p { margin: 0 0 16px; font-size: 14px; color: var(--muted); }
+  .sheet-buttons { display: flex; justify-content: flex-end; gap: 8px; }
   .mine .card-head { display: none; }
 
   .month { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin: 16px 2px 6px; }
@@ -278,6 +348,17 @@
     <p class="foot" id="foot"></p>
   </main>
 
+  <div class="overlay" id="dialog" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+      <h3 id="dialogTitle"></h3>
+      <p id="dialogBody"></p>
+      <div class="sheet-buttons">
+        <button type="button" class="act" id="dialogCancel">Cancel</button>
+        <button type="button" class="act primary" id="dialogOk">OK</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   // The Apps Script web app URL (Deploy > Manage deployments). It stays the
   // same when a new version is deployed. Leave it empty to preview the page
@@ -286,6 +367,19 @@
   const NAME_KEY = 'gbc-music-name';
   const VIEW_KEY = 'gbc-music-view';
   const DATA_KEY = 'gbc-music-data';
+  const OUT_KEY = 'gbc-music-out';
+
+  // Who "I'll be out" tells (the script emails the Sheet's owner).
+  const CONTACT_NAME = 'David Luttrull';
+  // Calendar events: start time in church time and length in minutes.
+  const CHURCH_TZ = 'America/Indiana/Indianapolis';
+  const SERVICE_TIME = {
+    'Sunday AM': { h: 10, m: 30, minutes: 90 },
+    'Sunday PM': { h: 18, m: 0, minutes: 75 },
+    'Wednesday': { h: 19, m: 0, minutes: 60 },
+  };
+  const LOCATION = 'Grace Baptist Church';
+  const PAGE_URL = 'https://davidluttrull.github.io/grace-music/';
 
   const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
   const SERVICE_SHORT = { 'Sunday AM': 'AM', 'Sunday PM': 'PM', 'Wednesday': 'Wed' };
@@ -297,6 +391,8 @@
   let services = [];
   let updated = '';
   let filter = 'All';
+  let mine = [];              // My dates entries, in the order shown
+  const openKeys = new Set(); // dates left open, kept open when the list redraws
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -349,18 +445,21 @@
     return false;
   }
 
-  function isMine(item, me) {
-    if (!me || NOT_PEOPLE.includes(item.section) || item.role === 'Notes') return false;
+  // The volunteer's name as it's written in this cell ("E Foote"), or [] if
+  // they aren't in it. The script uses these to mark the right cells red.
+  function matchesIn(item, me) {
+    if (!me || NOT_PEOPLE.includes(item.section) || item.role === 'Notes') return [];
     const tokens = splitNames(item.value);
-    if (tokens.some((t) => sameName(t, me))) return true;
-    if (!FREE_TEXT_ROLES.includes(item.role)) return false;
+    const hits = tokens.filter((t) => sameName(t, me));
+    if (hits.length || !FREE_TEXT_ROLES.includes(item.role)) return hits;
     // "Men's Quartet (David Luttrull Lead)", "Duet (David L & Jenn L)":
     // look for the name anywhere in the phrase.
-    return tokens.some((t) => {
+    const found = [];
+    tokens.forEach((t) => {
       const w = t.split(' ');
-      for (let i = 0; i + 1 < w.length; i++) if (sameName(w[i] + ' ' + w[i + 1], me)) return true;
-      return false;
+      for (let i = 0; i + 1 < w.length; i++) if (sameName(w[i] + ' ' + w[i + 1], me)) found.push(w[i] + ' ' + w[i + 1]);
     });
+    return found;
   }
 
   function allNames() {
@@ -448,29 +547,42 @@
         : '';
       return;
     }
-    const mine = services
-      .map((s) => ({ s, roles: s.items.filter((it) => isMine(it, me)).map(roleLabel) }))
-      .filter((x) => x.roles.length);
+    mine = services.map((s) => {
+      const hits = s.items.map((it) => ({ it, m: matchesIn(it, me) })).filter((h) => h.m.length);
+      return { s, roles: [...new Set(hits.map((h) => roleLabel(h.it)))], matches: [...new Set(hits.flatMap((h) => h.m))] };
+    }).filter((x) => x.roles.length);
     if (!mine.length) {
       $('#mineList').innerHTML = '<p class="empty"><b>No dates found for ' + esc(me) + '</b>' +
         'Check the spelling, or look under All services.</p>';
       return;
     }
-    let html = '', month = '';
+    let html = '<button type="button" class="act allcal" data-act="ics">Add all my dates to my calendar</button>';
+    let month = '';
     html += '<ul class="mine">';
-    mine.forEach(({ s, roles }) => {
+    mine.forEach(({ s, roles }, i) => {
       const m = fmt(s.date, { month: 'long', year: 'numeric' });
       if (m !== month) { html += '</ul><div class="month">' + esc(m) + '</div><ul class="mine">'; month = m; }
       const rel = relDay(s.date);
-      html += '<li><details><summary>' +
+      const key = outKey(s, me);
+      const out = isOut(key);
+      html += '<li><details data-key="' + esc(key) + '"' + (out ? ' class="is-out"' : '') + (openKeys.has(key) ? ' open' : '') + '><summary>' +
         '<div class="day"><b>' + parseDate(s.date).getDate() + '</b><small>' + esc(fmt(s.date, { weekday: 'short' })) + '</small></div>' +
-        '<div class="what"><b>' + esc([...new Set(roles)].join(', ')) + '</b><span>' +
+        '<div class="what"><b>' + esc(roles.join(', ')) + (out ? '<span class="pill-out">Out</span>' : '') + '</b><span>' +
         esc(SERVICE_LABEL[s.service] || s.service) + (rel ? ' &middot; ' + esc(rel) : '') + '</span></div>' +
         '<span class="chev" aria-hidden="true">&rsaquo;</span></summary>' +
-        serviceCard(s, me, false) + '</details></li>';
+        actions(i, out) + serviceCard(s, me, false) + '</details></li>';
     });
     html += '</ul>';
     $('#mineList').innerHTML = html.replace('<ul class="mine"></ul>', '');
+  }
+
+  function actions(i, out) {
+    const btns = out
+      ? '<span class="note">You told ' + esc(CONTACT_NAME) + ' you’ll be out.</span>' +
+        '<button type="button" class="act" data-act="undo" data-i="' + i + '">Undo</button>'
+      : '<a class="act" href="' + esc(googleUrl(eventFor(mine[i]))) + '" target="_blank" rel="noopener">Add to Google Calendar</a>' +
+        '<button type="button" class="act warn" data-act="out" data-i="' + i + '">I’ll be out</button>';
+    return '<div class="acts">' + btns + '</div>';
   }
 
   function renderFilters() {
@@ -492,6 +604,159 @@
     renderFilters();
     renderMine();
     renderAll();
+  }
+
+  // ---------- Calendar ----------
+  // Milliseconds church time is ahead of UTC at instant t (negative in Indiana).
+  function tzOffset(t) {
+    const p = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: CHURCH_TZ, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', second: 'numeric',
+    }).formatToParts(new Date(t)).forEach((x) => { p[x.type] = x.value; });
+    return Date.UTC(+p.year, p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - t;
+  }
+  // A clock time at church on a given date, whatever time zone the phone is in.
+  function churchTime(dateKey, h, m) {
+    const [y, mo, d] = dateKey.split('-').map(Number);
+    const wall = Date.UTC(y, mo - 1, d, h, m);
+    let t = wall - tzOffset(wall);
+    t = wall - tzOffset(t); // second pass covers the daylight-saving change
+    return new Date(t);
+  }
+  const stamp = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+  function eventFor(x) {
+    const t = SERVICE_TIME[x.s.service] || { h: 10, m: 0, minutes: 60 };
+    const start = churchTime(x.s.date, t.h, t.m);
+    return {
+      uid: x.s.date + '-' + x.s.service.replace(/\W+/g, '').toLowerCase() + '-' + norm(currentName()).replace(/\W+/g, '-') + '@grace-music',
+      title: x.roles.join(', ') + ' · ' + (SERVICE_LABEL[x.s.service] || x.s.service),
+      start,
+      end: new Date(start.getTime() + t.minutes * 60000),
+      details: 'Grace Baptist Church music and media schedule:\n' + PAGE_URL,
+    };
+  }
+
+  function googleUrl(ev) {
+    return 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+      '&text=' + encodeURIComponent(ev.title) +
+      '&dates=' + stamp(ev.start) + '/' + stamp(ev.end) +
+      '&details=' + encodeURIComponent(ev.details) +
+      '&location=' + encodeURIComponent(LOCATION);
+  }
+
+  function icsText(list) {
+    const txt = (v) => String(v).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+    // Calendar files want lines of 75 characters or fewer, continued with a space.
+    const fold = (line) => line.length <= 70 ? line : line.match(/.{1,70}/g).join('\r\n ');
+    const now = stamp(new Date());
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Grace Baptist Church//Music Schedule//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+    list.forEach((x) => {
+      const ev = eventFor(x);
+      lines.push('BEGIN:VEVENT', 'UID:' + ev.uid, 'DTSTAMP:' + now, 'DTSTART:' + stamp(ev.start), 'DTEND:' + stamp(ev.end),
+        'SUMMARY:' + txt(ev.title), 'DESCRIPTION:' + txt(ev.details), 'LOCATION:' + txt(LOCATION), 'END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    return lines.map(fold).join('\r\n') + '\r\n';
+  }
+
+  function downloadIcs(list) {
+    const blob = new Blob([icsText(list)], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'grace-music-schedule.ics';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+  }
+
+  // ---------- "I'll be out" ----------
+  const outKey = (s, me) => s.date + '|' + s.service + '|' + norm(me);
+  function outMap() {
+    try { return JSON.parse(store((s) => s.getItem(OUT_KEY)) || '{}') || {}; } catch (e) { return {}; }
+  }
+  const isOut = (key) => !!outMap()[key];
+  function setOut(key, out) {
+    const map = outMap();
+    if (out) map[key] = Date.now(); else delete map[key];
+    store((s) => s.setItem(OUT_KEY, JSON.stringify(map)));
+  }
+
+  // POST is sent as plain text with no cookies, so there's no CORS preflight
+  // and no Google login involved (the same as the attendance page).
+  async function post(body) {
+    let res;
+    try {
+      const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
+      res = await r.json();
+    } catch (e) {
+      throw new Error('Couldn’t reach the schedule. Check your connection and try again.');
+    }
+    if (res.status !== 'ok') throw new Error(res.message || 'Something went wrong. Try again.');
+    return res;
+  }
+
+  function dialog({ title, body, ok, cancel = 'Cancel' }) {
+    return new Promise((resolve) => {
+      $('#dialogTitle').textContent = title;
+      $('#dialogBody').textContent = body;
+      $('#dialogOk').textContent = ok;
+      $('#dialogCancel').textContent = cancel;
+      $('#dialog').hidden = false;
+      $('#dialogOk').focus();
+      const done = (v) => {
+        $('#dialog').hidden = true;
+        $('#dialogOk').onclick = $('#dialogCancel').onclick = $('#dialog').onclick = null;
+        document.removeEventListener('keydown', onKey);
+        resolve(v);
+      };
+      const onKey = (e) => { if (e.key === 'Escape') done(false); };
+      document.addEventListener('keydown', onKey);
+      $('#dialogOk').onclick = () => done(true);
+      $('#dialogCancel').onclick = () => done(false);
+      $('#dialog').onclick = (e) => { if (e.target === $('#dialog')) done(false); };
+    });
+  }
+
+  async function onMineClick(e) {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    const me = currentName();
+    if (b.dataset.act === 'ics') {
+      downloadIcs(mine.filter((x) => !isOut(outKey(x.s, me))));
+      return;
+    }
+    const x = mine[Number(b.dataset.i)];
+    if (!x) return;
+    const going = b.dataset.act === 'out';
+    const when = (SERVICE_LABEL[x.s.service] || x.s.service) + ', ' + fmt(x.s.date, { month: 'short', day: 'numeric' });
+    if (going) {
+      const ok = await dialog({
+        title: 'Out for ' + when + '?',
+        body: 'This lets ' + CONTACT_NAME + ' know you can’t serve (' + x.roles.join(', ') + ') and find a sub.',
+        ok: 'I’ll be out',
+      });
+      if (!ok) return;
+    }
+    const label = b.textContent;
+    b.disabled = true;
+    b.textContent = going ? 'Sending…' : 'Undoing…';
+    const bar = b.closest('.acts');
+    const old = bar.querySelector('.err');
+    if (old) old.remove();
+    try {
+      await post({ action: going ? 'out' : 'undo', name: me, date: x.s.date, service: x.s.service, matches: x.matches });
+      const key = outKey(x.s, me);
+      setOut(key, going);
+      openKeys.add(key);
+      renderMine();
+    } catch (err) {
+      b.disabled = false;
+      b.textContent = label;
+      bar.insertAdjacentHTML('beforeend', '<span class="err">' + esc(err.message) + '</span>');
+    }
   }
 
   // ---------- State ----------
@@ -529,6 +794,11 @@
     }
   }
 
+  $('#mineList').addEventListener('click', onMineClick);
+  $('#mineList').addEventListener('toggle', (e) => {
+    const key = e.target.dataset && e.target.dataset.key;
+    if (key) e.target.open ? openKeys.add(key) : openKeys.delete(key);
+  }, true);
   $('#viewMine').onclick = () => setView('mine');
   $('#viewAll').onclick = () => setView('all');
   $('#filters').onclick = (e) => {

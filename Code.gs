@@ -11,6 +11,10 @@
  * starts with a row whose column A is one of SERVICES and whose columns C:G
  * hold dates, then a "Week" row, then one row per role until a blank row.
  *
+ * doPost handles the page's "I'll be out" button: it adds a row to the Away
+ * tab (which turns that person's cells red for that one service) and emails
+ * the script's owner. Undo removes the row again.
+ *
  * It also adds a Music Schedule menu to the Sheet: one item puts the rotation
  * formulas back in selected cells, the other builds the next month's tab.
  */
@@ -19,6 +23,11 @@ const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];
 const FIRST_DATE_COL = 3; // column C
 const DATE_COLS = 5;      // C:G, up to five weeks
 const DAYS_BACK = 1;      // keep yesterday's services so Sunday night still shows Sunday
+
+const AWAY_SHEET = 'Away';
+const PAGE_NOTE = 'Volunteer page';  // Note column prefix on rows the page adds, so Undo only removes those
+const MAX_POSTS = 40;                // "I'll be out" requests allowed per 10 minutes, across all phones
+const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
 
 /** GET: upcoming services, oldest first. */
 function doGet() {
@@ -100,6 +109,186 @@ function readMonth_(sheet, tz) {
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ---------- "I'll be out" from the page ----------
+
+/**
+ * POST from the page, body {action: 'out' | 'undo', name, date, service, matches}.
+ * `matches` are the volunteer's name as it's written in that service's cells
+ * ("E Foote"), so the Away tab's red highlight finds them. The page sends it as
+ * plain text with no Google login, like the attendance page.
+ */
+function doPost(e) {
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return json_({ status: 'error', message: 'That request didn’t make sense. Reload the page and try again.' });
+  }
+  try {
+    if (!underRateLimit_()) {
+      return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
+    }
+    const req = checkRequest_(body);
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      return json_(req.action === 'undo' ? undoOut_(req) : markOut_(req));
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (err) {
+    return json_({ status: 'error', message: err.message });
+  }
+}
+
+function checkRequest_(body) {
+  const action = body && body.action;
+  if (action !== 'out' && action !== 'undo') throw new Error('Unknown request. Reload the page and try again.');
+  const name = clean_(body.name);
+  if (name.length < 2) throw new Error('Type your name at the top of the page first.');
+  const date = String(body.date || '');
+  const service = String(body.service || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || SERVICES.indexOf(service) < 0) {
+    throw new Error('That service isn’t on the schedule. Reload the page.');
+  }
+  const asked = (Array.isArray(body.matches) ? body.matches : []).map(clean_).filter(Boolean).slice(0, 6)
+    .filter((m, i, all) => all.indexOf(m) === i);
+  if (!asked.length) throw new Error('Your name isn’t on that service. Reload the page.');
+  if (action === 'undo') return { action, name, date, service, matches: asked, roles: [] };
+
+  // Only names that really appear in that service, so the page can't be used
+  // to put anything else on the Away tab.
+  const svc = upcomingServices_().find((s) => s.date === date && s.service === service);
+  if (!svc) throw new Error('That service isn’t on the schedule anymore. Reload the page.');
+  const has = (value, m) => value.toLowerCase().indexOf(m.toLowerCase()) >= 0;
+  const matches = asked.filter((m) => svc.items.some((it) => has(it.value, m)));
+  if (!matches.length) throw new Error('Your name isn’t on that service anymore. Reload the page.');
+  const roles = svc.items.filter((it) => matches.some((m) => has(it.value, m))).map((it) => it.role);
+  return { action, name, date, service, matches, roles };
+}
+
+function markOut_(req) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = awaySheet_(ss);
+  const col = awayColumns_(sheet);
+  const tz = ss.getSpreadsheetTimeZone();
+  const already = awayRowsFor_(sheet, col, req, tz).map((r) => r.name);
+  const [y, m, d] = req.date.split('-').map(Number);
+  const note = PAGE_NOTE + ': ' + req.name + ' (' + req.roles.join(', ') + '), ' +
+    Utilities.formatDate(new Date(), tz, 'MMM d, h:mm a');
+
+  req.matches.forEach((match) => {
+    if (already.indexOf(match.toLowerCase()) >= 0) return;
+    const row = new Array(sheet.getLastColumn()).fill('');
+    row[col.Name - 1] = match;
+    row[col.From - 1] = '=DATE(' + y + ',' + m + ',' + d + ')';
+    row[col.Service - 1] = req.service;
+    row[col.Note - 1] = note;
+    sheet.appendRow(row);
+  });
+
+  const emailed = notify_('Out: ' + req.name + ', ' + serviceLabel_(req, tz), [
+    req.name + ' says they’ll be out for ' + serviceLabel_(req, tz) + '.',
+    'Scheduled for: ' + req.roles.join(', '),
+    '',
+    'Their name is red on the schedule now. To undo it, delete their row on the Away tab:',
+    ss.getUrl(),
+  ].join('\n'));
+  return { status: 'ok', out: true, emailed: emailed };
+}
+
+function undoOut_(req) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = awaySheet_(ss);
+  const col = awayColumns_(sheet);
+  const tz = ss.getSpreadsheetTimeZone();
+  const rows = awayRowsFor_(sheet, col, req, tz).filter((r) => r.fromPage);
+  rows.sort((a, b) => b.row - a.row).forEach((r) => sheet.deleteRow(r.row));
+
+  const emailed = rows.length > 0 && notify_('Back in: ' + req.name + ', ' + serviceLabel_(req, tz), [
+    req.name + ' undid their "I’ll be out" for ' + serviceLabel_(req, tz) + '.',
+    'Their name is back to normal on the schedule.',
+    '',
+    ss.getUrl(),
+  ].join('\n'));
+  return { status: 'ok', out: false, removed: rows.length, emailed: emailed };
+}
+
+function awaySheet_(ss) {
+  const sheet = ss.getSheetByName(AWAY_SHEET);
+  if (!sheet) throw new Error('The schedule is missing its Away tab. Let the music office know.');
+  return sheet;
+}
+
+/** Column numbers on the Away tab, found by header name. */
+function awayColumns_(sheet) {
+  const head = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map((h) => String(h).trim());
+  const col = {};
+  ['Name', 'From', 'To', 'Service', 'Note'].forEach((h) => {
+    const i = head.indexOf(h);
+    if (i < 0) throw new Error('The Away tab is missing its ' + h + ' column. Let the music office know.');
+    col[h] = i + 1;
+  });
+  return col;
+}
+
+/** Away rows for this date, service and any of the request's names. */
+function awayRowsFor_(sheet, col, req, tz) {
+  const last = sheet.getLastRow();
+  if (last < 2) return [];
+  const want = req.matches.map((m) => m.toLowerCase());
+  const out = [];
+  sheet.getRange(2, 1, last - 1, sheet.getLastColumn()).getValues().forEach((v, i) => {
+    const from = v[col.From - 1];
+    if (!(from instanceof Date) || Utilities.formatDate(from, tz, 'yyyy-MM-dd') !== req.date) return;
+    if (String(v[col.Service - 1]).trim() !== req.service) return;
+    const name = String(v[col.Name - 1]).trim().toLowerCase();
+    if (want.indexOf(name) < 0) return;
+    out.push({ row: i + 2, name: name, fromPage: String(v[col.Note - 1]).indexOf(PAGE_NOTE) === 0 });
+  });
+  return out;
+}
+
+function serviceLabel_(req, tz) {
+  const [y, m, d] = req.date.split('-').map(Number);
+  return SERVICE_LABEL[req.service] + ', ' + Utilities.formatDate(new Date(y, m - 1, d, 12), tz, 'EEE MMM d');
+}
+
+/**
+ * Emails the script's owner, or the address in the NOTIFY_EMAIL script
+ * property if there is one. A failed email doesn't fail the request.
+ */
+function notify_(subject, body) {
+  try {
+    const to = PropertiesService.getScriptProperties().getProperty('NOTIFY_EMAIL') ||
+      Session.getEffectiveUser().getEmail();
+    if (!to) return false;
+    MailApp.sendEmail(to, subject, body, { name: 'Music Schedule' });
+    return true;
+  } catch (err) {
+    console.error('Email failed: ' + err);
+    return false;
+  }
+}
+
+/** Run once from the editor so Google asks for permission to send email. */
+function sendTestEmail() {
+  const ok = notify_('Music Schedule test', 'Emails from the volunteer page’s "I’ll be out" button will come here.');
+  console.log(ok ? 'Test email sent.' : 'The test email didn’t send. Check the log above.');
+}
+
+function underRateLimit_() {
+  const cache = CacheService.getScriptCache();
+  const count = Number(cache.get('posts') || 0);
+  if (count >= MAX_POSTS) return false;
+  cache.put('posts', String(count + 1), 600);
+  return true;
+}
+
+function clean_(s) {
+  return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, 60);
 }
 
 // ---------- Sheet menu ----------

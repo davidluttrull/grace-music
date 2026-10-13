@@ -4,7 +4,7 @@ Volunteers open a web page on their phones, type their name, and see the dates t
 
 It has two parts:
 
-- **The script** (`Code.gs`). It lives inside the **Music Schedule 2026** Google Sheet and hands the page the upcoming services. It reads only the month tabs. The Rotation and Away tabs are never sent, so nobody sees who's out of town.
+- **The script** (`Code.gs`). It lives inside the **Music Schedule 2026** Google Sheet and hands the page the upcoming services. It reads only the month tabs. The Rotation and Away tabs are never sent, so nobody sees who's out of town. It also takes the page's "I'll be out" reports, adds them to the Away tab, and emails you.
 - **The page** (`index.html`, plus the logo, icons, and `manifest.webmanifest`). It's hosted on GitHub Pages at <https://davidluttrull.github.io/grace-music/>, the same way as the attendance page.
 
 Volunteers don't need a Google account. Anyone with the link can see the schedule, which is the same as sharing the Google Doc by link today.
@@ -47,6 +47,8 @@ Send the page's address, <https://davidluttrull.github.io/grace-music/>. Each vo
 ## How it works
 
 - **My dates** lists every upcoming service where the volunteer's name appears, with their roles ("Synth", "Congregational Singers Alto", "Slides"). Tapping a date opens the full service.
+- **Add to Google Calendar** (inside each date) opens Google Calendar with the event filled in; the volunteer taps Save. **Add all my dates to my calendar** (at the top) downloads a calendar file with every date they're serving, which an iPhone opens in its Calendar app. Events start at 10:30 AM (Sunday AM, 90 minutes), 6:00 PM (Sunday PM, 75 minutes), and 7:00 PM (Wednesday, 60 minutes). The times are in `SERVICE_TIME` in `index.html`.
+- **I'll be out** (inside each date) asks the volunteer to confirm, then adds a row to the Away tab for that one service. Their name turns red on the schedule and you get an email. The date shows **Out**, with an **Undo** button that removes the row and emails you again.
 - **All services** shows every upcoming service as a card, with buttons to show only Sunday AM, Sunday PM, or Wednesday. The volunteer's own name is highlighted.
 - Services stay on the page through the day after they happen, so Sunday night still shows Sunday.
 - The page loads fresh data every time it opens, so edits to the Sheet show up right away. If a phone has no signal, it shows the last copy it loaded and says so.
@@ -64,8 +66,19 @@ The first time you use the menu, Google asks for permission the same way it did 
 
 - **Names:** type full names ("Eloise Foote") when you can. The page also recognizes the short forms you've used before, such as "E Foote" or "Eliana W". Several people in one cell can be separated by &, a comma, or /.
 - **Offering and Special** can hold any text, such as "Men's Quartet (David Luttrull Lead)". Anyone named in it gets that date in My dates.
+- **Away tab:** each row is a name, a From date, an optional To date, an optional Service, and a note. Leave To blank for one day. Put Sunday AM, Sunday PM, or Wednesday in Service to mark just that service, or leave it blank for every service. Rows the page adds have a note starting with "Volunteer page". To clear one, delete the row.
 - Don't rename the service labels (Sunday AM, Sunday PM, Wednesday) or the "Week" rows. The script uses them to find each block.
 
 ## Updating the script
 
 When `Code.gs` changes, paste the new version into Apps Script and save, then reload the Sheet. That's all the menu needs. If the change touches what the page shows (the `doGet` part), also click **Deploy → Manage deployments**, click the pencil icon, choose **New version** under Version, and click **Deploy**. Don't use **New deployment**, because that creates a new URL and the page would stop reaching the script.
+
+## Turning on "I'll be out" (one time)
+
+1. Paste the new `Code.gs` into Apps Script and save.
+2. In the function dropdown next to **Debug**, pick **sendTestEmail** and click **Run**. Google asks for permission again, this time to send email as you. Allow it, and check that the test email arrives.
+3. Click **Deploy → Manage deployments**, click the pencil icon, choose **New version**, and click **Deploy**.
+
+Emails go to the account that owns the script. To send them somewhere else, open **Project Settings** (the gear icon), and under **Script Properties** add `NOTIFY_EMAIL` with the address.
+
+Anyone with the page's link can press "I'll be out", but only for names that are on that service, and every report emails you. If someone misuses it, delete their rows on the Away tab.
