@@ -287,7 +287,7 @@
   const VIEW_KEY = 'gbc-music-view';
   const DATA_KEY = 'gbc-music-data';
 
-  const SERVICE_LABEL = { 'Sunday AM': 'Sunday morning', 'Sunday PM': 'Sunday evening', 'Wednesday': 'Wednesday evening' };
+  const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
   const SERVICE_SHORT = { 'Sunday AM': 'AM', 'Sunday PM': 'PM', 'Wednesday': 'Wed' };
   // Rows in these sections hold song titles and notes, not people.
   const NOT_PEOPLE = ['Songs'];
@@ -385,8 +385,8 @@
   }
 
   function roleLabel(item) {
-    if (item.section === 'Cong. Singers') return item.role === 'Extras' ? 'Cong. Singers' : 'Cong. Singers ' + item.role.toLowerCase();
-    if (item.role === 'Leading') return 'Leading singing';
+    if (item.section === 'Congregational Singers') return item.role === 'Extras' ? item.section : item.section + ' ' + item.role;
+    if (item.role === 'Leading') return 'Leading Singing';
     if (item.role === 'Special') return 'Special: ' + item.value;
     return item.role;
   }
