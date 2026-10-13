@@ -203,23 +203,24 @@
 
   .mine { list-style: none; margin: 12px 0 0; padding: 0; }
   .mine li { margin-bottom: 8px; }
-  .mine details {
+  .mine .entry {
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 14px;
     box-shadow: var(--shadow);
     overflow: hidden;
   }
-  .mine summary {
-    list-style: none;
+  .mine .row {
     display: grid;
     grid-template-columns: 52px 1fr auto;
     align-items: center;
     gap: 12px;
+    width: 100%;
     padding: 10px 14px;
-    cursor: pointer;
+    border: 0;
+    background: none;
+    text-align: left;
   }
-  .mine summary::-webkit-details-marker { display: none; }
   .day {
     text-align: center;
     background: var(--tint);
@@ -233,7 +234,7 @@
   .what b { display: block; font-weight: 600; font-size: 15px; }
   .what span { font-size: 13px; color: var(--muted); }
   .chev { color: var(--muted); transition: transform .15s; font-size: 18px; }
-  details[open] .chev { transform: rotate(90deg); }
+  .row[aria-expanded="true"] .chev { transform: rotate(90deg); }
   .mine .card { border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; margin: 0; }
   .pill-out {
     font-size: 11px;
@@ -247,18 +248,18 @@
     margin-left: 6px;
     vertical-align: 2px;
   }
-  details.is-out .day { background: var(--out-bg); border-color: transparent; color: var(--out-ink); }
-  details.is-out .day small { color: var(--out-ink); }
+  .entry.is-out .day { background: var(--out-bg); border-color: transparent; color: var(--out-ink); }
+  .entry.is-out .day small { color: var(--out-ink); }
 
   .acts {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 10px 14px;
-    border-top: 1px solid var(--line);
-    background: var(--tint);
+    padding: 0 14px 12px;
   }
+  .acts .act { flex: 1 1 0; }
+  .acts .note + .act { flex: 0 0 auto; }
   .act {
     display: inline-flex;
     align-items: center;
@@ -271,6 +272,7 @@
     color: var(--ink);
     font-size: 13px;
     font-weight: 600;
+    text-align: center;
     text-decoration: none;
   }
   .act.warn { color: var(--out-ink); }
@@ -565,12 +567,15 @@
       const rel = relDay(s.date);
       const key = outKey(s, me);
       const out = isOut(key);
-      html += '<li><details data-key="' + esc(key) + '"' + (out ? ' class="is-out"' : '') + (openKeys.has(key) ? ' open' : '') + '><summary>' +
+      const open = openKeys.has(key);
+      html += '<li class="entry' + (out ? ' is-out' : '') + '" data-key="' + esc(key) + '">' +
+        '<button type="button" class="row" data-act="toggle" aria-expanded="' + open + '">' +
         '<div class="day"><b>' + parseDate(s.date).getDate() + '</b><small>' + esc(fmt(s.date, { weekday: 'short' })) + '</small></div>' +
         '<div class="what"><b>' + esc(roles.join(', ')) + (out ? '<span class="pill-out">Out</span>' : '') + '</b><span>' +
         esc(SERVICE_LABEL[s.service] || s.service) + (rel ? ' &middot; ' + esc(rel) : '') + '</span></div>' +
-        '<span class="chev" aria-hidden="true">&rsaquo;</span></summary>' +
-        actions(i, out) + serviceCard(s, me, false) + '</details></li>';
+        '<span class="chev" aria-hidden="true">&rsaquo;</span></button>' +
+        actions(i, out) +
+        '<div class="full"' + (open ? '' : ' hidden') + '>' + serviceCard(s, me, false) + '</div></li>';
     });
     html += '</ul>';
     $('#mineList').innerHTML = html.replace('<ul class="mine"></ul>', '');
@@ -580,7 +585,7 @@
     const btns = out
       ? '<span class="note">You told ' + esc(CONTACT_NAME) + ' you’ll be out.</span>' +
         '<button type="button" class="act" data-act="undo" data-i="' + i + '">Undo</button>'
-      : '<a class="act" href="' + esc(googleUrl(eventFor(mine[i]))) + '" target="_blank" rel="noopener">Add to Google Calendar</a>' +
+      : '<a class="act" href="' + esc(googleUrl(eventFor(mine[i]))) + '" target="_blank" rel="noopener">Add to Calendar</a>' +
         '<button type="button" class="act warn" data-act="out" data-i="' + i + '">I’ll be out</button>';
     return '<div class="acts">' + btns + '</div>';
   }
@@ -723,6 +728,14 @@
   async function onMineClick(e) {
     const b = e.target.closest('button[data-act]');
     if (!b) return;
+    if (b.dataset.act === 'toggle') {
+      const li = b.closest('.entry');
+      const open = b.getAttribute('aria-expanded') !== 'true';
+      b.setAttribute('aria-expanded', open);
+      li.querySelector('.full').hidden = !open;
+      open ? openKeys.add(li.dataset.key) : openKeys.delete(li.dataset.key);
+      return;
+    }
     const me = currentName();
     if (b.dataset.act === 'ics') {
       downloadIcs(mine.filter((x) => !isOut(outKey(x.s, me))));
@@ -795,10 +808,6 @@
   }
 
   $('#mineList').addEventListener('click', onMineClick);
-  $('#mineList').addEventListener('toggle', (e) => {
-    const key = e.target.dataset && e.target.dataset.key;
-    if (key) e.target.open ? openKeys.add(key) : openKeys.delete(key);
-  }, true);
   $('#viewMine').onclick = () => setView('mine');
   $('#viewAll').onclick = () => setView('all');
   $('#filters').onclick = (e) => {
