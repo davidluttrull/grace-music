@@ -46,7 +46,7 @@ Send the page's address, <https://gracetoanderson.com/musicschedule>. Each volun
 
 ## How it works
 
-- **My Dates** lists every upcoming service where the volunteer's name appears, with their roles ("Synth", "Congregational Singers Alto", "Slides"). Tapping a date opens the full service.
+- **My Dates** lists every upcoming service where the volunteer's name appears, with their roles ("Synth", "Congregational Singers Alto", "Slides"). Tapping a date opens the full service. A date where they're on the schedule but not in the Rotation tab for that week (a swap or a sub) gets a yellow "Not your usual week" tag. If only some of that day's roles changed, the tag names them ("Leading Singing: not your usual week"). Offering, Special, and one-time services aren't in the rotation, so they never get the tag.
 - **Add to Calendar** (under each date) opens Google Calendar with the event filled in; the volunteer taps Save. **Add all my dates to my calendar** (at the top) downloads a calendar file with every date they're serving, which an iPhone opens in its Calendar app. Events start at 10:30 AM (Sunday AM, 90 minutes), 6:00 PM (Sunday PM, 75 minutes), and 7:00 PM (Wednesday, 60 minutes). The times are in `SERVICE_TIME` in `index.html`.
 - **I'll be out** (under each date) asks the volunteer to confirm, then adds a row to the Away tab for that one service. Their name turns red on the schedule and you get an email. The date shows **Out**, with an **Undo** button that removes the row and emails you again.
 - **All Services** shows every upcoming service as a card, with buttons to show only Sunday AM, Sunday PM, or Wednesday. The volunteer's own name is highlighted.

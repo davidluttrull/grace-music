@@ -268,6 +268,16 @@
     margin-left: 6px;
     vertical-align: 2px;
   }
+  .what .what-change {
+    display: inline-block;
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mark-ink);
+    background: var(--mark-bg);
+    border-radius: 6px;
+    padding: 1px 7px;
+  }
   .entry.is-out .day { background: var(--out-bg); border-color: transparent; color: var(--out-ink); }
   .entry.is-out .day small { color: var(--out-ink); }
 
@@ -519,6 +529,29 @@
     return [...seen.values()].sort((a, b) => a.localeCompare(b));
   }
 
+  // ---------- Changes from the rotation ----------
+  // The Prelude row follows the Piano rotation.
+  const ROTATION_ROLE = { Prelude: 'Piano' };
+  const weekOfMonth = (key) => Math.ceil(parseDate(key).getDate() / 7);
+
+  // Whether the rotation has the volunteer in this cell that week: true, false,
+  // or null for rows the rotation never fills (Offering, Special, one-time
+  // services, a rotation row with no names yet).
+  function inRotation(svc, item, me) {
+    const role = ROTATION_ROLE[item.role] || item.role;
+    const r = rotation.find((x) => x.service === svc.service && x.section === item.section && x.role === role);
+    if (!r || !r.weeks.some(Boolean)) return null;
+    const usual = r.weeks[weekOfMonth(svc.date) - 1] || '';
+    return splitNames(usual).some((t) => sameName(t, me));
+  }
+
+  // "Not your usual week", or "Synth: not your usual week" when only some of
+  // the day's rotation roles changed.
+  function changeText(x) {
+    if (!x.changed.length) return '';
+    return x.changed.length === x.tracked.length ? 'Not your usual week' : x.changed.join(', ') + ': not your usual week';
+  }
+
   // ---------- Rendering ----------
   function highlight(value, me) {
     if (!me) return esc(value);
@@ -595,7 +628,11 @@
     }
     mine = services.map((s) => {
       const hits = s.items.map((it) => ({ it, m: matchesIn(it, me) })).filter((h) => h.m.length);
-      return { s, roles: [...new Set(hits.map((h) => roleLabel(h.it)))], matches: [...new Set(hits.flatMap((h) => h.m))] };
+      const roles = [...new Set(hits.map((h) => roleLabel(h.it)))];
+      const checked = hits.map((h) => ({ role: roleLabel(h.it), usual: inRotation(s, h.it, me) })).filter((c) => c.usual !== null);
+      const tracked = [...new Set(checked.map((c) => c.role))];
+      const changed = tracked.filter((r) => !checked.some((c) => c.role === r && c.usual));
+      return { s, roles, tracked, changed, matches: [...new Set(hits.flatMap((h) => h.m))] };
     }).filter((x) => x.roles.length);
     if (!mine.length) {
       $('#mineList').innerHTML = '<p class="empty"><b>No dates found for ' + esc(me) + '</b>' +
@@ -605,7 +642,8 @@
     let html = '<button type="button" class="act allcal" data-act="ics">Add all my dates to my calendar</button>';
     let month = '';
     html += '<ul class="mine">';
-    mine.forEach(({ s, roles }, i) => {
+    mine.forEach((x, i) => {
+      const { s, roles } = x;
       const m = fmt(s.date, { month: 'long', year: 'numeric' });
       if (m !== month) { html += '</ul><div class="month">' + esc(m) + '</div><ul class="mine">'; month = m; }
       const rel = relDay(s.date);
@@ -618,7 +656,8 @@
         '<div class="day"><b>' + parseDate(s.date).getDate() + '</b><small>' + esc(fmt(s.date, { weekday: 'short' })) + '</small></div>' +
         '<div class="what"><b>' + esc(roles.join(', ')) + (out ? '<span class="pill-out">Out</span>' : '') + '</b><span>' +
         esc(serviceName(s)) + (timeText(s) ? ' &middot; ' + esc(timeText(s)) : '') + (rel ? ' &middot; ' + esc(rel) : '') + '</span>' +
-        (serviceNote(s) ? '<span class="what-note">' + esc(serviceNote(s)) + '</span>' : '') + '</div>' +
+        (serviceNote(s) ? '<span class="what-note">' + esc(serviceNote(s)) + '</span>' : '') +
+        (changeText(x) && !off ? '<span class="what-change">' + esc(changeText(x)) + '</span>' : '') + '</div>' +
         '<span class="chev" aria-hidden="true">&rsaquo;</span></button>' +
         (off ? '' : actions(i, out)) +
         '<div class="full"' + (open ? '' : ' hidden') + '>' + serviceCard(s, me, false) + '</div></li>';
