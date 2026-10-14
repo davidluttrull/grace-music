@@ -102,14 +102,14 @@ To change the code, edit **ORDER_CODE** under **Project Settings → Script Prop
 
 ### Each week
 
-1. Pick the date at the top. A Sunday sheet has the morning and evening services; a Wednesday or a one-time service gets its own sheet. Cancelled services are left off.
+1. Pick the date at the top, and the sheet size next to it: **2 per page** (half sheet, 5½ × 8½ in) or **3 per page** (third sheet, 3⅔ × 8½ in). The builder remembers your size. A Sunday sheet has the morning and evening services; a Wednesday or a one-time service gets its own sheet. Cancelled services are left off.
 2. Each service starts from its default order with that week's songs, prelude, offering, special, and team filled in from the Sheet. Those show in gray with "from Song 1" (or similar) beside them. Type over one to change it on this sheet only; clear it to go back to the Sheet's value. Changes in the Sheet show up in the builder until you type over them.
 3. Add verse notes ("all 4", "1, 3-4") in each hymn's Verses box. Hymn numbers and a "*New*" at the start of a song title come from the Sheet automatically.
 4. Drag ⠿ to reorder. **Add** puts in a hymn, special song, choir, missionary presentation, Scripture reading, Communion, and more, just above the closing song. ● leaves an item off the sheet without deleting it; ✕ removes it.
 5. **Show team credits** turns the Music, Singers, and Media list on or off. Services with no song leader in the Sheet (Sunday evening) have a Song leader box.
-6. The preview shows the half sheet exactly as it prints. If a week runs long, the text shrinks a little to fit; if it still doesn't fit, the preview says so.
+6. The preview shows one copy exactly as it prints. If a week runs long, the text shrinks a little to fit; if it still doesn't fit, the preview says so.
 7. **Save** stores the sheet on the **Orders** tab, so you can finish it later or on another computer. Until you save, changes are kept on the computer you're using.
-8. **Print** prints two copies side by side on one landscape letter page; cut it in half. Use Chrome, leave Scale at 100%, and turn off Headers and footers. To keep a PDF for your Drive folder, choose **Save as PDF** as the printer.
+8. **Print** prints two or three copies side by side on one landscape letter page; cut them apart. Use Chrome, leave Scale at 100%, and turn off Headers and footers. To keep a PDF for your Drive folder, choose **Save as PDF** as the printer.
 
 **Make this the default** saves a service's current order as the starting point for every new sheet of that kind (Sunday morning, Sunday evening, Wednesday, or one-time services). Verses and changed schedule values aren't carried into the default. **Start over** throws away this sheet's changes to that service and starts from the default again.
 

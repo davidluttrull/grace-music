@@ -38,6 +38,7 @@
     background: var(--brand-deep); color: #fff;
   }
   .bar h1 { margin: 0 8px 0 0; font-size: 16px; font-weight: 600; }
+  .bar #layout { min-width: 0; }
   .bar select { min-height: 36px; border-radius: 8px; border: 0; padding: 0 10px; color: var(--ink); min-width: 260px; }
   .bar .spacer { flex: 1; }
   .bar .status { font-size: 13px; color: #CFE3C0; }
@@ -91,7 +92,7 @@
   .fit-warn { color: var(--danger); font-weight: 500; }
   .paper-wrap { background: #d9dfd5; border-radius: 12px; padding: 14px; overflow: hidden; }
   .paper-scale { transform-origin: top left; }
-  .paper { width: 5.5in; height: 8.5in; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+  .paper { width: fit-content; height: 8.5in; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
 
   /* ---------- The half sheet (screen preview and print) ---------- */
   .half { width: 5.5in; height: 8.5in; padding: 0.38in 0.42in 0.3in; display: flex; flex-direction: column; color: #000; font-family: 'Source Sans 3', 'Segoe UI', sans-serif; }
@@ -116,6 +117,17 @@
   .half-foot { display: flex; justify-content: center; padding-top: .12in; }
   .half-foot img { height: 0.42in; filter: brightness(0); }
 
+  /* Third sheet: 3 2/3 x 8 1/2 in, three across the page */
+  .half.third { width: 3.6667in; padding: 0.3in 0.24in 0.22in; }
+  .half.third .half-body { font-size: calc(9.5pt * var(--s, 1)); line-height: 1.25; }
+  .half.third .svc-hd { display: block; }
+  .half.third .svc-hd span { display: block; text-align: left; font-size: .8em; }
+  .half.third .ln { gap: 6px; }
+  .half.third .ln .l { flex: 0 1 auto; }
+  .half.third .cg { column-gap: .35em; }
+  .half.third .half-foot { padding-top: .08in; }
+  .half.third .half-foot img { height: 0.32in; }
+
   /* ---------- Print: two copies side by side on letter landscape ---------- */
   #printArea { display: none; }
   @page { size: letter landscape; margin: 0; }
@@ -139,6 +151,10 @@
   <div class="bar">
     <h1>Order of Service</h1>
     <select id="date" aria-label="Date"></select>
+    <select id="layout" aria-label="Sheet size">
+      <option value="half">2 per page (half sheet)</option>
+      <option value="third">3 per page (third sheet)</option>
+    </select>
     <span class="spacer"></span>
     <span class="status" id="status"></span>
     <button type="button" class="btn" id="saveBtn">Save</button>
@@ -151,7 +167,7 @@
       <div id="editor"></div>
     </div>
     <div class="preview">
-      <div class="preview-head"><span>Prints twice, side by side, on letter paper (landscape).</span><span id="fit"></span></div>
+      <div class="preview-head"><span id="printNote"></span><span id="fit"></span></div>
       <div class="paper-wrap" id="paperWrap"><div class="paper-scale" id="paperScale"><div class="paper"><div class="half" id="half"></div></div></div></div>
     </div>
   </div>
@@ -173,6 +189,9 @@
   const API_URL = 'https://script.google.com/macros/s/AKfycbyN_FOd4twDKmMrDk5l3NqTmKRJrKhIC3kUgkuumCKGoxK_wlkFxZlWevtGUyPtSnPE8Q/exec';
   const CODE_KEY = 'gbc-oos-code';
   const DRAFT_PREFIX = 'gbc-oos-draft|';
+  const LAYOUT_KEY = 'gbc-oos-layout';
+  const LAYOUTS = { half: { width: 5.5, copies: 2, min: 0.7 }, third: { width: 11 / 3, copies: 3, min: 0.6 } };
+  let layout = LAYOUTS[store((s) => s.getItem(LAYOUT_KEY))] ? store((s) => s.getItem(LAYOUT_KEY)) : 'half';
   const PASTOR = 'Pastor Daniel Stevens';
 
   const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];
@@ -516,7 +535,7 @@
     const body = half.querySelector('.half-body');
     let s = 1;
     body.style.setProperty('--s', s);
-    while (body.scrollHeight > body.clientHeight + 1 && s > 0.7) {
+    while (body.scrollHeight > body.clientHeight + 1 && s > LAYOUTS[layout].min) {
       s = Math.round((s - 0.02) * 100) / 100;
       body.style.setProperty('--s', s);
     }
@@ -526,31 +545,33 @@
   let lastFit = { s: 1, fits: true };
   function renderPreview() {
     const half = $('#half');
+    half.className = 'half' + (layout === 'third' ? ' third' : '');
     half.innerHTML = halfHtml();
     lastFit = fit(half);
-    $('#fit').innerHTML = !lastFit.fits ? '<span class="fit-warn">Too long for a half sheet. Leave something off.</span>'
+    $('#fit').innerHTML = !lastFit.fits ? '<span class="fit-warn">Too long to fit. Leave something off.</span>'
       : lastFit.s < 1 ? 'Text shrunk to ' + Math.round(lastFit.s * 100) + '% to fit' : '';
     scalePreview();
   }
 
   function scalePreview() {
     const wrap = $('#paperWrap');
-    const k = Math.min(1, (wrap.clientWidth - 28) / (5.5 * 96));
+    const w = LAYOUTS[layout].width * 96;
+    const k = Math.min(1, (wrap.clientWidth - 28) / w);
     $('#paperScale').style.transform = 'scale(' + k + ')';
     $('#paperScale').style.height = (8.5 * 96 * k) + 'px';
-    $('#paperScale').style.width = (5.5 * 96 * k) + 'px';
+    $('#paperScale').style.width = (w * k) + 'px';
   }
   window.addEventListener('resize', scalePreview);
 
+  const printCopies = () => $('#half').outerHTML.replace(' id="half"', '').repeat(LAYOUTS[layout].copies);
   function print() {
-    const copy = $('#half').outerHTML.replace(' id="half"', '');
-    $('#printArea').innerHTML = copy + copy;
+    $('#printArea').innerHTML = printCopies();
     window.print();
   }
   $('#printBtn').onclick = print;
   // Ctrl/Cmd+P prints the same two-up sheet.
   window.addEventListener('beforeprint', () => {
-    if (!$('#printArea').innerHTML) { const copy = $('#half').outerHTML.replace(' id="half"', ''); $('#printArea').innerHTML = copy + copy; }
+    if (!$('#printArea').innerHTML) $('#printArea').innerHTML = printCopies();
   });
   window.addEventListener('afterprint', () => { $('#printArea').innerHTML = ''; });
 
@@ -650,6 +671,15 @@
 
   // ---------- Start ----------
   $('#date').onchange = () => chooseDate($('#date').value);
+  function setLayout(v) {
+    layout = v;
+    $('#layout').value = v;
+    $('#printNote').textContent = 'Prints ' + (v === 'third' ? 'three' : 'two') + ' across on letter paper (landscape).';
+    store((s) => s.setItem(LAYOUT_KEY, v));
+    if (sheet.length) renderPreview();
+  }
+  $('#layout').onchange = () => setLayout($('#layout').value);
+  setLayout(layout);
 
   async function start() {
     $('#status').textContent = 'Loading…';
