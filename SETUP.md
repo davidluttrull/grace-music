@@ -4,7 +4,7 @@ Volunteers open a web page on their phones, type their name, and see the dates t
 
 It has two parts:
 
-- **The script** (`Code.gs`). It lives inside the **Music Schedule 2026** Google Sheet and hands the page the upcoming services. It reads only the month tabs. The Rotation and Away tabs are never sent, so nobody sees who's out of town. It also takes the page's "I'll be out" reports, adds them to the Away tab, and emails you.
+- **The script** (`Code.gs`). It lives inside the **Music Schedule 2026** Google Sheet and hands the page the upcoming services. It reads the month tabs and the table on the Rotation tab (not the notes under it). The Away tab is never sent, so nobody sees who's out of town. It also takes the page's "I'll be out" reports, adds them to the Away tab, and emails you.
 - **The page** (`index.html`, plus the logo, icons, and `manifest.webmanifest`). It's hosted on GitHub Pages at <https://davidluttrull.github.io/grace-music/>, the same way as the attendance page. The church site forwards <https://gracetoanderson.com/musicschedule> there, and that's the address volunteers use.
 
 Volunteers don't need a Google account. Anyone with the link can see the schedule, which is the same as sharing the Google Doc by link today.
@@ -50,6 +50,7 @@ Send the page's address, <https://gracetoanderson.com/musicschedule>. Each volun
 - **Add to Calendar** (under each date) opens Google Calendar with the event filled in; the volunteer taps Save. **Add all my dates to my calendar** (at the top) downloads a calendar file with every date they're serving, which an iPhone opens in its Calendar app. Events start at 10:30 AM (Sunday AM, 90 minutes), 6:00 PM (Sunday PM, 75 minutes), and 7:00 PM (Wednesday, 60 minutes). The times are in `SERVICE_TIME` in `index.html`.
 - **I'll be out** (under each date) asks the volunteer to confirm, then adds a row to the Away tab for that one service. Their name turns red on the schedule and you get an email. The date shows **Out**, with an **Undo** button that removes the row and emails you again.
 - **All Services** shows every upcoming service as a card, with buttons to show only Sunday AM, Sunday PM, or Wednesday. The volunteer's own name is highlighted.
+- **Rotation** shows the regular lineup for the 1st through 5th week of the month, opening on the coming Sunday's week. Volunteers who've typed their name under My Dates also see "Your regular spots", every week they're in the rotation. It comes straight from the Rotation tab, so editing that table updates the page. Only the table is shared; the College students and Backup singers notes under it stay in the Sheet, as long as there's a blank row between the table and the notes.
 - **Service Notes** from the Sheet show in a blue band at the top of each service in All Services, and in blue under the date in My Dates. They're also added to the calendar event's title.
 - Services stay on the page through the day after they happen, so Sunday night still shows Sunday.
 - The page loads fresh data every time it opens, so edits to the Sheet show up right away. If a phone has no signal, it shows the last copy it loaded and says so.

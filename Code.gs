@@ -3,8 +3,9 @@
  *
  * Back end for the volunteers' schedule page (index.html, hosted on GitHub
  * Pages). doGet reads every month tab in this spreadsheet and returns the
- * upcoming services as JSON. It never reads the Rotation or Away tabs, so
- * who's out of town stays private.
+ * upcoming services as JSON, plus the regular rotation from the Rotation
+ * tab's table (not the notes under it). It never reads the Away tab, so who's
+ * out of town stays private.
  * See SETUP.md for how to deploy it.
  *
  * A month tab is any tab whose A1 says "Month". Inside it, each service block
@@ -27,6 +28,7 @@ const DATE_COLS = 5;      // C:G, up to five weeks
 const DAYS_BACK = 1;      // keep yesterday's services so Sunday night still shows Sunday
 
 const AWAY_SHEET = 'Away';
+const ROTATION_SHEET = 'Rotation';
 const PAGE_NOTE = 'Volunteer page';  // Note column prefix on rows the page adds, so Undo only removes those
 const MAX_POSTS = 40;                // "I'll be out" requests allowed per 10 minutes, across all phones
 const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
@@ -34,7 +36,7 @@ const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Even
 /** GET: upcoming services, oldest first. */
 function doGet() {
   try {
-    return json_({ services: upcomingServices_(), updated: new Date().toISOString() });
+    return json_({ services: upcomingServices_(), rotation: rotation_(), updated: new Date().toISOString() });
   } catch (err) {
     return json_({ status: 'error', message: 'The schedule couldn’t be read. ' + err.message });
   }
@@ -104,6 +106,23 @@ function readMonth_(sheet, tz) {
       });
       out.push({ date: col.date, service: service, items: items });
     });
+  }
+  return out;
+}
+
+/**
+ * The Rotation tab's table (Service, Section, Role, Week 1-5), down to the
+ * first row with no service, so the notes under it stay in the Sheet.
+ */
+function rotation_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ROTATION_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3 + DATE_COLS).getDisplayValues();
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const [service, section, role] = rows[i].slice(0, 3).map((v) => String(v).trim());
+    if (!service) break;
+    if (role) out.push({ service, section, role, weeks: rows[i].slice(3).map((v) => String(v).trim()) });
   }
   return out;
 }
