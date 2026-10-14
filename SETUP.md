@@ -1,6 +1,6 @@
 # Music Schedule: Setup
 
-Volunteers open a web page on their phones, type their name, and see the dates they're serving. They can also browse every upcoming service, with the songs, music team, Congregational Singers, and media team.
+Volunteers open a web page on their phones, type their name, and see the dates they're serving. They can also browse every upcoming service, with the songs, accompanists, Congregational Singers, and media team.
 
 It has two parts:
 
