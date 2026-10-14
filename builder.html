@@ -92,7 +92,7 @@
   .fit-warn { color: var(--danger); font-weight: 500; }
   .paper-wrap { background: #d9dfd5; border-radius: 12px; padding: 14px; overflow: hidden; }
   .paper-scale { transform-origin: top left; }
-  .paper { width: fit-content; height: 8.5in; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+  .paper { width: fit-content; height: fit-content; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
 
   /* ---------- The half sheet (screen preview and print) ---------- */
   .half { width: 5.5in; height: 8.5in; padding: 0.38in 0.42in 0.3in; display: flex; flex-direction: column; color: #000; font-family: 'Source Sans 3', 'Segoe UI', sans-serif; }
@@ -136,13 +136,19 @@
   .half.third .half-foot { padding-top: .08in; }
   .half.third .half-foot img { height: 0.32in; }
 
+  /* Sixth sheet (Wednesday): 3 2/3 x 4 1/4 in, three across and two down. Uses the third-sheet rules too. */
+  .half.sixth { height: 4.25in; padding: 0.2in 0.24in 0.14in; }
+  .half.sixth .half-body { font-size: calc(9pt * var(--s, 1)); }
+  .half.sixth .half-foot { padding-top: .05in; }
+  .half.sixth .half-foot img { height: 0.24in; }
+
   /* ---------- Print: two copies side by side on letter landscape ---------- */
   #printArea { display: none; }
   @page { size: letter landscape; margin: 0; }
   @media print {
     body { background: #fff; }
     body > *:not(#printArea) { display: none !important; }
-    #printArea { display: flex !important; width: 11in; height: 8.5in; }
+    #printArea { display: flex !important; flex-wrap: wrap; align-content: flex-start; width: 11in; height: 8.5in; }
     #printArea .half { break-inside: avoid; }
   }
 
@@ -162,6 +168,7 @@
     <select id="layout" aria-label="Sheet size">
       <option value="third">3 per page (third sheet)</option>
       <option value="half">2 per page (half sheet)</option>
+      <option value="sixth">6 per page (Wednesday)</option>
     </select>
     <span class="spacer"></span>
     <span class="status" id="status"></span>
@@ -198,8 +205,16 @@
   const CODE_KEY = 'gbc-oos-code';
   const DRAFT_PREFIX = 'gbc-oos-draft|';
   const LAYOUT_KEY = 'gbc-oos-layout';
-  const LAYOUTS = { half: { width: 5.5, copies: 2, min: 0.7 }, third: { width: 11 / 3, copies: 3, min: 0.6 } };
-  let layout = LAYOUTS[store((s) => s.getItem(LAYOUT_KEY))] ? store((s) => s.getItem(LAYOUT_KEY)) : 'third';
+  const LAYOUTS = {
+    half: { width: 5.5, height: 8.5, copies: 2, min: 0.7, cls: '', note: 'two across' },
+    third: { width: 11 / 3, height: 8.5, copies: 3, min: 0.6, cls: ' third', note: 'three across' },
+    sixth: { width: 11 / 3, height: 4.25, copies: 6, min: 0.6, cls: ' third sixth', note: 'six (three across, two down)' },
+  };
+  // Wednesday sheets remember their own size, starting at 6 per page; everything else starts at 3.
+  const isWednesdaySheet = () => sheet.length > 0 && sheet.every((p) => p.svc.service === 'Wednesday');
+  const layoutKey = () => LAYOUT_KEY + (isWednesdaySheet() ? '|wed' : '');
+  const savedLayout = () => { const v = store((s) => s.getItem(layoutKey())); return LAYOUTS[v] ? v : (isWednesdaySheet() ? 'sixth' : 'third'); };
+  let layout = 'third';
   const PASTOR = 'Pastor Daniel Stevens';
 
   const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];
@@ -327,6 +342,7 @@
       const key = svc.date + '|' + svc.service;
       return Object.assign({ svc, key }, loadOrder(svc, key));
     });
+    showLayout(savedLayout());
     renderEditor();
     renderPreview();
     renderStatus();
@@ -563,7 +579,7 @@
   let lastFit = { s: 1, fits: true };
   function renderPreview() {
     const half = $('#half');
-    half.className = 'half' + (layout === 'third' ? ' third' : '');
+    half.className = 'half' + LAYOUTS[layout].cls;
     half.innerHTML = halfHtml();
     lastFit = fit(half);
     $('#fit').innerHTML = !lastFit.fits ? '<span class="fit-warn">Too long to fit. Leave something off.</span>'
@@ -576,7 +592,7 @@
     const w = LAYOUTS[layout].width * 96;
     const k = Math.min(1, (wrap.clientWidth - 28) / w);
     $('#paperScale').style.transform = 'scale(' + k + ')';
-    $('#paperScale').style.height = (8.5 * 96 * k) + 'px';
+    $('#paperScale').style.height = (LAYOUTS[layout].height * 96 * k) + 'px';
     $('#paperScale').style.width = (w * k) + 'px';
   }
   window.addEventListener('resize', scalePreview);
@@ -689,15 +705,18 @@
 
   // ---------- Start ----------
   $('#date').onchange = () => chooseDate($('#date').value);
-  function setLayout(v) {
+  function showLayout(v) {
     layout = v;
     $('#layout').value = v;
-    $('#printNote').textContent = 'Prints ' + (v === 'third' ? 'three' : 'two') + ' across on letter paper (landscape).';
-    store((s) => s.setItem(LAYOUT_KEY, v));
+    $('#printNote').textContent = 'Prints ' + LAYOUTS[v].note + ' on letter paper (landscape).';
+  }
+  function setLayout(v) {
+    showLayout(v);
+    store((s) => s.setItem(layoutKey(), v));
     if (sheet.length) renderPreview();
   }
   $('#layout').onchange = () => setLayout($('#layout').value);
-  setLayout(layout);
+  showLayout(layout);
 
   async function start() {
     $('#status').textContent = 'Loading…';
