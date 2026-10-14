@@ -142,6 +142,17 @@
   .half.sixth .half-foot { padding-top: .05in; }
   .half.sixth .half-foot img { height: 0.24in; }
 
+  /* Wednesday sheets are short, so they get a bigger date and logo, and one credit per line
+     with no indent (no singers, so the labels don't need room for SOPRANO). */
+  .half.wed .svc-hd span { font-size: 1.05em; }
+  .half.wed .lead { font-size: .92em; }
+  .half.wed .credits { grid-template-columns: max-content minmax(0, 1fr); font-size: .92em; }
+  .half.wed .credits .k { text-align: left; }
+  .half.wed .credits span:empty { display: none; }
+  .half.wed .half-foot img { height: 0.84in; }
+  .half.third.wed .half-foot img { height: 0.64in; }
+  .half.sixth.wed .half-foot img { height: 0.48in; }
+
   /* ---------- Print: two copies side by side on letter landscape ---------- */
   #printArea { display: none; }
   @page { size: letter landscape; margin: 0; }
@@ -578,7 +589,7 @@
   let lastFit = { s: 1, fits: true };
   function renderPreview() {
     const half = $('#half');
-    half.className = 'half' + LAYOUTS[layout].cls;
+    half.className = 'half' + LAYOUTS[layout].cls + (isWednesdaySheet() ? ' wed' : '');
     half.innerHTML = halfHtml();
     lastFit = fit(half);
     $('#fit').innerHTML = !lastFit.fits ? '<span class="fit-warn">Too long to fit. Leave something off.</span>'
