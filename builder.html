@@ -109,12 +109,17 @@
   .num { display: inline-block; min-width: 1.7em; padding: 0 .25em; margin-right: .3em; border: .6pt solid #555; border-radius: 3px; font-style: normal; font-weight: 600; font-size: .85em; text-align: center; line-height: 1.3; }
   .new { display: inline-block; padding: 0 .25em; margin-right: .3em; border: .6pt solid #000; border-radius: 3px; font-style: normal; font-weight: 700; font-size: .72em; letter-spacing: .04em; vertical-align: .1em; }
   .vv { font-style: normal; font-weight: 400; color: #555; font-size: .85em; margin-left: .2em; }
-  .credits { margin-top: .45em; padding-top: .3em; border-top: .5pt solid #999; font-size: .8em; line-height: 1.3; }
-  .cg-h { font-size: .78em; font-weight: 700; letter-spacing: .1em; margin: .35em 0 .1em; border-bottom: .4pt solid #bbb; }
+  /* Team credits: one grid for every group (label, name, label, name), so names line up
+     across groups, and the whole block is centered under the order of service. */
+  .credits {
+    display: grid; grid-template-columns: auto minmax(0, auto) auto minmax(0, auto);
+    column-gap: .5em; row-gap: .05em; width: fit-content; max-width: 100%; margin: .55em auto 0;
+    font-size: .8em; line-height: 1.3;
+  }
+  .cg-h { grid-column: 1 / -1; font-size: .78em; font-weight: 700; letter-spacing: .1em; margin: .35em 0 .1em; border-bottom: .4pt solid #bbb; }
   .cg-h:first-child { margin-top: 0; }
-  /* Same label width in every group, so all names start at the same place. */
-  .cg { display: grid; grid-template-columns: 3.95em 1fr 3.95em 1fr; column-gap: .5em; row-gap: .05em; }
-  .cg .k { text-align: right; color: #555; font-size: .82em; text-transform: uppercase; letter-spacing: .06em; padding-top: .1em; white-space: nowrap; }
+  .credits .k { text-align: right; color: #555; font-size: .82em; text-transform: uppercase; letter-spacing: .06em; padding-top: .1em; white-space: nowrap; }
+  .credits .k2 { padding-left: 1.4em; }
   .half-foot { display: flex; justify-content: center; padding-top: .12in; }
   .half-foot img { height: 0.42in; filter: brightness(0); }
 
@@ -125,7 +130,8 @@
   .half.third .svc-hd span { display: block; text-align: left; font-size: .8em; }
   .half.third .ln { gap: 6px; }
   .half.third .ln .l { flex: 0 1 auto; }
-  .half.third .cg { column-gap: .35em; }
+  .half.third .credits { column-gap: .35em; }
+  .half.third .credits .k2 { padding-left: .9em; }
   .half.third .half-foot { padding-top: .08in; }
   .half.third .half-foot img { height: 0.32in; }
 
@@ -491,15 +497,21 @@
     return '<div class="ln"><span class="l">' + left + '</span><span class="r">' + right + '</span></div>';
   }
 
-  function grid(pairs) {
-    return '<div class="cg">' + pairs.map(([k, v]) => k ? '<span class="k">' + esc(k) + '</span><span>' + esc(v) + '</span>' : '<span></span><span></span>').join('') + '</div>';
+  // Two pairs per line; the second pair's label gets extra space before it.
+  function rows(pairs) {
+    return pairs.map(([k, v], i) => {
+      const cls = i % 2 ? 'k k2' : 'k';
+      return k ? '<span class="' + cls + '">' + esc(k) + '</span><span>' + esc(v) + '</span>' : '<span class="' + cls + '"></span><span></span>';
+    }).join('') + (pairs.length % 2 ? '<span></span><span></span>' : '');
   }
 
   function creditsHtml(part) {
     const svc = part.svc;
     const music = [];
     MUSIC.forEach(([role, label]) => { const v = roleValue(svc, role); if (v) music.push([label, v]); });
-    if (!music.some(([k]) => k === 'Leader') && part.order.leader) music.unshift(['Leader', part.order.leader]);
+    // The song leader gets a line of their own above the accompanists.
+    const leader = (music.find(([k]) => k === 'Leader') || [])[1] || part.order.leader || '';
+    const accompanists = music.filter(([k]) => k !== 'Leader');
     const singers = [];
     SINGER_ROWS.forEach((row) => {
       const cells = row.map((role) => { const v = roleValue(svc, role); return v ? [SINGER_LABEL[role] || role, v] : [null, '']; });
@@ -507,9 +519,10 @@
     });
     const media = [];
     MEDIA.forEach(([role, label]) => { const v = roleValue(svc, role); if (v) media.push([label, v]); });
-    const groups = [['ACCOMPANISTS', music], ['SINGERS', singers], ['MEDIA', media]].filter(([, list]) => list.length);
-    if (!groups.length) return '';
-    return '<div class="credits">' + groups.map(([h, list]) => '<div class="cg-h">' + h + '</div>' + grid(list)).join('') + '</div>';
+    const groups = [['ACCOMPANISTS', accompanists], ['SINGERS', singers], ['MEDIA', media]].filter(([, list]) => list.length);
+    if (!groups.length && !leader) return '';
+    return '<div class="credits">' + (leader ? rows([['Leader', leader]]) : '') +
+      groups.map(([h, list]) => '<div class="cg-h">' + h + '</div>' + rows(list)).join('') + '</div>';
   }
 
   function headerRight(svc) {
