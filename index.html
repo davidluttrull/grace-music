@@ -517,7 +517,7 @@
   }
 
   function roleLabel(item) {
-    if (item.section === 'Congregational Singers') return item.role === 'Extras' ? item.section : item.section + ' ' + item.role;
+    if (item.section === 'Congregational Singers') return item.section + ' ' + item.role;
     if (item.role === 'Leading') return 'Leading Singing';
     if (item.role === 'Special') return 'Special: ' + item.value;
     return item.role;
