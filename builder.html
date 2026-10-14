@@ -101,7 +101,7 @@
   .svc-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1.5pt solid #000; padding-bottom: .15em; margin-bottom: .35em; }
   .svc-hd b { font-size: 1.45em; font-weight: 700; letter-spacing: .005em; }
   .svc-hd span { font-size: .9em; font-weight: 600; color: #333; text-align: right; }
-  .lead { font-weight: 700; margin: -.1em 0 .3em; }
+  .lead { font-weight: 700; font-size: .8em; margin: -.05em 0 .35em; }  /* same size as the team credits */
   .ln { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: .07em 0; }
   .ln .l { color: #333; }
   .ln .l i { color: #000; }
@@ -114,7 +114,7 @@
      E. GUITAR and SOPRANO) so names line up across groups and services. */
   .credits {
     display: grid; grid-template-columns: 3.95em minmax(0, 1fr) 3.95em minmax(0, 1fr);
-    column-gap: .5em; row-gap: .05em; margin-top: .55em;
+    column-gap: .5em; row-gap: .05em; margin-top: 1.2em;
     font-size: .8em; line-height: 1.3;
   }
   .cg-h { grid-column: 1 / -1; font-size: .78em; font-weight: 700; letter-spacing: .1em; margin: .35em 0 .1em; border-bottom: .4pt solid #bbb; }
@@ -366,7 +366,7 @@
         Object.keys(PRESETS).map((k) => '<option>' + esc(k) + '</option>').join('') +
         '</select><button type="button" class="btn small" data-act="add">Add</button></div>' +
         '<div class="opts"><label><input type="checkbox" data-act="credits"' + (part.order.credits !== false ? ' checked' : '') + '> Show team credits</label>' +
-        (needsLeader ? '<label>Song leader <input type="text" data-act="leader" value="' + esc(part.order.leader || '') + '" placeholder="Name"></label>' : '') +
+        (needsLeader ? '<label>Music leader <input type="text" data-act="leader" value="' + esc(part.order.leader || '') + '" placeholder="Name"></label>' : '') +
         '</div></div></section>';
     }).join('');
   }
@@ -541,7 +541,7 @@
       const svc = part.svc;
       const leader = leaderOf(part);
       return '<section class="svc"><div class="svc-hd"><b>' + esc(SERVICE_LABEL[svc.service] || svc.service) + '</b><span>' + esc(headerRight(svc)) + '</span></div>' +
-        (leader ? '<div class="lead">Song Leader: ' + esc(leader) + '</div>' : '') +
+        (leader ? '<div class="lead">Music Leader: ' + esc(leader) + '</div>' : '') +
         part.order.items.filter((it) => prints(it, svc)).map((it) => lineHtml(it, svc)).join('') +
         (part.order.credits !== false ? creditsHtml(part) : '') + '</section>';
     }).join('');
