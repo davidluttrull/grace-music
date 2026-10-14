@@ -31,6 +31,8 @@
     --mark-ink: #4A3500;
     --out-bg: #FCE4E4;
     --out-ink: #9B1C1C;
+    --note-bg: #E3EEFB;
+    --note-ink: #0C447C;
     --danger: #B3261E;
     --shadow: 0 1px 2px rgba(35, 54, 23, .06), 0 2px 8px rgba(35, 54, 23, .06);
   }
@@ -49,6 +51,8 @@
       --mark-ink: #FFE7A3;
       --out-bg: #4A1F1F;
       --out-ink: #F7C1C1;
+      --note-bg: #0F2A47;
+      --note-ink: #B5D4F4;
       --danger: #F2B8B5;
       --shadow: none;
     }
@@ -233,9 +237,19 @@
   .day small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
   .what b { display: block; font-weight: 600; font-size: 15px; }
   .what span { font-size: 13px; color: var(--muted); }
+  .what .what-note { display: block; color: var(--note-ink); font-weight: 600; }
+  .svc-note {
+    padding: 8px 14px;
+    background: var(--note-bg);
+    color: var(--note-ink);
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--line);
+  }
   .chev { color: var(--muted); transition: transform .15s; font-size: 18px; }
   .row[aria-expanded="true"] .chev { transform: rotate(90deg); }
   .mine .card { border: 0; border-top: 1px solid var(--line); border-radius: 0; box-shadow: none; margin: 0; }
+  .mine .svc-note { display: none; } /* already shown on the date row */
   .pill-out {
     font-size: 11px;
     font-weight: 600;
@@ -388,6 +402,9 @@
   // Rows in these sections hold song titles and notes, not people.
   const NOT_PEOPLE = ['Songs'];
   const FREE_TEXT_ROLES = ['Offering', 'Special'];
+  // The row at the top of each service in the Sheet ("Lord's Supper").
+  const SERVICE_NOTES = 'Service Notes';
+  const serviceNote = (svc) => (svc.items.find((it) => it.role === SERVICE_NOTES) || {}).value || '';
 
   const $ = (sel) => document.querySelector(sel);
   let services = [];
@@ -450,7 +467,7 @@
   // The volunteer's name as it's written in this cell ("E Foote"), or [] if
   // they aren't in it. The script uses these to mark the right cells red.
   function matchesIn(item, me) {
-    if (!me || NOT_PEOPLE.includes(item.section) || item.role === 'Notes') return [];
+    if (!me || NOT_PEOPLE.includes(item.section) || item.role === 'Notes' || item.role === SERVICE_NOTES) return [];
     const tokens = splitNames(item.value);
     const hits = tokens.filter((t) => sameName(t, me));
     if (hits.length || !FREE_TEXT_ROLES.includes(item.role)) return hits;
@@ -467,7 +484,7 @@
   function allNames() {
     const seen = new Map();
     services.forEach((s) => s.items.forEach((it) => {
-      if (NOT_PEOPLE.includes(it.section) || it.section === 'Service') return;
+      if (NOT_PEOPLE.includes(it.section) || it.section === 'Service' || it.role === SERVICE_NOTES) return;
       splitNames(it.value).forEach((n) => {
         // Full names only; "E Foote" style shorthand would clutter the list.
         if (!/^[A-Za-z][A-Za-z'.-]+( [A-Za-z][A-Za-z'.-]+)+$/.test(n)) return;
@@ -495,6 +512,7 @@
   function serviceBody(svc, me) {
     const groups = [];
     svc.items.forEach((it) => {
+      if (it.role === SERVICE_NOTES) return;
       let g = groups[groups.length - 1];
       if (!g || g.section !== it.section) groups.push(g = { section: it.section, items: [] });
       g.items.push(it);
@@ -521,6 +539,7 @@
       ' &middot; ' + esc(SERVICE_SHORT[svc.service] || svc.service) +
       (isNext ? '<span class="badge">Next</span>' : '') + '</h2>' +
       '<span class="when">' + esc(rel) + '</span></div>' +
+      (serviceNote(svc) ? '<div class="svc-note">' + esc(serviceNote(svc)) + '</div>' : '') +
       serviceBody(svc, me) + '</article>';
   }
 
@@ -572,7 +591,8 @@
         '<button type="button" class="row" data-act="toggle" aria-expanded="' + open + '">' +
         '<div class="day"><b>' + parseDate(s.date).getDate() + '</b><small>' + esc(fmt(s.date, { weekday: 'short' })) + '</small></div>' +
         '<div class="what"><b>' + esc(roles.join(', ')) + (out ? '<span class="pill-out">Out</span>' : '') + '</b><span>' +
-        esc(SERVICE_LABEL[s.service] || s.service) + (rel ? ' &middot; ' + esc(rel) : '') + '</span></div>' +
+        esc(SERVICE_LABEL[s.service] || s.service) + (rel ? ' &middot; ' + esc(rel) : '') + '</span>' +
+        (serviceNote(s) ? '<span class="what-note">' + esc(serviceNote(s)) + '</span>' : '') + '</div>' +
         '<span class="chev" aria-hidden="true">&rsaquo;</span></button>' +
         actions(i, out) +
         '<div class="full"' + (open ? '' : ' hidden') + '>' + serviceCard(s, me, false) + '</div></li>';
@@ -636,7 +656,7 @@
     const start = churchTime(x.s.date, t.h, t.m);
     return {
       uid: x.s.date + '-' + x.s.service.replace(/\W+/g, '').toLowerCase() + '-' + norm(currentName()).replace(/\W+/g, '-') + '@grace-music',
-      title: x.roles.join(', ') + ' · ' + (SERVICE_LABEL[x.s.service] || x.s.service),
+      title: x.roles.join(', ') + ' · ' + (SERVICE_LABEL[x.s.service] || x.s.service) + (serviceNote(x.s) ? ' · ' + serviceNote(x.s) : ''),
       start,
       end: new Date(start.getTime() + t.minutes * 60000),
       details: 'Grace Baptist Church music and media schedule:\n' + PAGE_URL,
