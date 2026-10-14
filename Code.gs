@@ -8,8 +8,10 @@
  * See SETUP.md for how to deploy it.
  *
  * A month tab is any tab whose A1 says "Month". Inside it, each service block
- * starts with a row whose column A is one of SERVICES and whose columns C:G
- * hold dates, then a "Week" row, then one row per role until a blank row.
+ * starts with a header row: the service's name in column A, nothing in B, and
+ * dates in C:G. A "Week" row may follow, then one row per role until a blank
+ * row. The regular services are in SERVICES; any other name in column A
+ * (such as "Christmas Eve") is a one-time service with its date typed in C.
  *
  * doPost handles the page's "I'll be out" button: it adds a row to the Away
  * tab (which turns that person's cells red for that one service) and emails
@@ -19,7 +21,7 @@
  * formulas back in selected cells, the other builds the next month's tab.
  */
 
-const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];
+const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];  // repeat every month
 const FIRST_DATE_COL = 3; // column C
 const DATE_COLS = 5;      // C:G, up to five weeks
 const DAYS_BACK = 1;      // keep yesterday's services so Sunday night still shows Sunday
@@ -70,7 +72,7 @@ function readMonth_(sheet, tz) {
   let r = 0;
   while (r < values.length) {
     const service = String(shown[r][0]).trim();
-    if (SERVICES.indexOf(service) < 0) { r++; continue; }
+    if (!isHeader_(shown[r], values[r])) { r++; continue; }
 
     // Header row: dates in C:G (the 5th is blank in a four-week month).
     const cols = [];
@@ -89,7 +91,7 @@ function readMonth_(sheet, tz) {
       const sec = String(shown[r][0]).trim();
       const role = String(shown[r][1]).trim();
       if (!sec && !role) break;
-      if (SERVICES.indexOf(sec) >= 0) break;
+      if (isHeader_(shown[r], values[r])) break;
       if (sec) section = sec;
       rows.push({ r: r, section: section, role: role });
     }
@@ -104,6 +106,12 @@ function readMonth_(sheet, tz) {
     });
   }
   return out;
+}
+
+/** A service block's first row: a name in A, nothing in B, a date in C. */
+function isHeader_(shownRow, valueRow) {
+  return String(shownRow[0]).trim() !== '' && String(shownRow[1]).trim() === '' &&
+    valueRow[FIRST_DATE_COL - 1] instanceof Date;
 }
 
 function json_(obj) {
@@ -150,7 +158,7 @@ function checkRequest_(body) {
   if (name.length < 2) throw new Error('Type your name at the top of the page first.');
   const date = String(body.date || '');
   const service = String(body.service || '');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || SERVICES.indexOf(service) < 0) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !service || service.length > 60) {
     throw new Error('That service isn’t on the schedule. Reload the page.');
   }
   const asked = (Array.isArray(body.matches) ? body.matches : []).map(clean_).filter(Boolean).slice(0, 6)
@@ -253,7 +261,7 @@ function awayRowsFor_(sheet, col, req, tz) {
 
 function serviceLabel_(req, tz) {
   const [y, m, d] = req.date.split('-').map(Number);
-  return SERVICE_LABEL[req.service] + ', ' + Utilities.formatDate(new Date(y, m - 1, d, 12), tz, 'EEE MMM d');
+  return (SERVICE_LABEL[req.service] || req.service) + ', ' + Utilities.formatDate(new Date(y, m - 1, d, 12), tz, 'EEE MMM d');
 }
 
 /**
@@ -371,6 +379,7 @@ function addNextMonth() {
   ss.moveActiveSheet(latest.getIndex() + 1);
   sheet.getRange('B1').setFormula('=DATE(' + next[0] + ',' + next[1] + ',1)');
 
+  removeOneTimeServices_(sheet);
   const keys = rowKeys_(sheet.getRange(1, 1, sheet.getLastRow(), 2).getDisplayValues());
   keys.forEach((key, i) => {
     if (!key) return;
@@ -379,6 +388,26 @@ function addNextMonth() {
     else row.clearContent();
   });
   toast_(name + ' is ready. Names come from the rotation; songs and notes are blank.');
+}
+
+/**
+ * Deletes blocks for one-time services (any header not in SERVICES, such as
+ * "Christmas Eve") from a newly copied month, with the blank row above each.
+ */
+function removeOneTimeServices_(sheet) {
+  const labels = sheet.getRange(1, 1, sheet.getLastRow(), 2).getDisplayValues()
+    .map((row) => [String(row[0]).trim(), String(row[1]).trim()]);
+  const blocks = [];
+  for (let i = 2; i < labels.length; i++) {
+    const [a, b] = labels[i];
+    if (!a || b || SERVICES.indexOf(a) >= 0) continue;
+    let end = i;
+    while (end + 1 < labels.length && (labels[end + 1][0] || labels[end + 1][1])) end++;
+    const start = !labels[i - 1][0] && !labels[i - 1][1] ? i - 1 : i;
+    blocks.push([start, end]);
+    i = end;
+  }
+  blocks.reverse().forEach(([start, end]) => sheet.deleteRows(start + 1, end - start + 1));
 }
 
 function isMonthSheet_(sheet) {
@@ -398,7 +427,7 @@ function rowKeys_(labels) {
   return labels.map((row) => {
     const a = String(row[0]).trim();
     const b = String(row[1]).trim();
-    if (SERVICES.indexOf(a) >= 0) { service = a; return null; }
+    if (a && !b) { service = a; return null; }  // a service header
     if (!service || !b || b === 'Week') return null;
     return service + '|' + b;
   });

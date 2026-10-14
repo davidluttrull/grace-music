@@ -413,6 +413,12 @@
   // "Cancelled", "Cancelled - snow", "No Regular Evening Service - Harvest Family Night"
   const CANCELLED = /cancel|^\s*no\b.*\bservice/i;
   const isCancelled = (svc) => CANCELLED.test(serviceNote(svc));
+  // One-time services (Christmas Eve) have a Time row in the Sheet instead of a fixed time.
+  const TIME_ROLE = 'Time';
+  const timeText = (svc) => (svc.items.find((it) => it.role === TIME_ROLE) || {}).value || '';
+  const serviceName = (svc) => SERVICE_LABEL[svc.service] || svc.service;
+  // Not people: these rows describe the service.
+  const INFO_ROLES = [SERVICE_NOTES, TIME_ROLE];
 
   const $ = (sel) => document.querySelector(sel);
   let services = [];
@@ -475,7 +481,7 @@
   // The volunteer's name as it's written in this cell ("E Foote"), or [] if
   // they aren't in it. The script uses these to mark the right cells red.
   function matchesIn(item, me) {
-    if (!me || NOT_PEOPLE.includes(item.section) || item.role === 'Notes' || item.role === SERVICE_NOTES) return [];
+    if (!me || NOT_PEOPLE.includes(item.section) || INFO_ROLES.includes(item.role)) return [];
     const tokens = splitNames(item.value);
     const hits = tokens.filter((t) => sameName(t, me));
     if (hits.length || !FREE_TEXT_ROLES.includes(item.role)) return hits;
@@ -492,7 +498,7 @@
   function allNames() {
     const seen = new Map();
     services.forEach((s) => s.items.forEach((it) => {
-      if (NOT_PEOPLE.includes(it.section) || it.section === 'Service' || it.role === SERVICE_NOTES) return;
+      if (NOT_PEOPLE.includes(it.section) || it.section === 'Service' || INFO_ROLES.includes(it.role)) return;
       splitNames(it.value).forEach((n) => {
         // Full names only; "E Foote" style shorthand would clutter the list.
         if (!/^[A-Za-z][A-Za-z'.-]+( [A-Za-z][A-Za-z'.-]+)+$/.test(n)) return;
@@ -520,7 +526,7 @@
   function serviceBody(svc, me) {
     const groups = [];
     svc.items.forEach((it) => {
-      if (it.role === SERVICE_NOTES) return;
+      if (INFO_ROLES.includes(it.role)) return;
       let g = groups[groups.length - 1];
       if (!g || g.section !== it.section) groups.push(g = { section: it.section, items: [] });
       g.items.push(it);
@@ -545,7 +551,7 @@
     const off = isCancelled(svc);
     return '<article class="card' + (off ? ' cancelled' : '') + '">' +
       '<div class="card-head"><h2>' + esc(fmt(svc.date, { weekday: 'short', month: 'short', day: 'numeric' })) +
-      ' &middot; ' + esc(SERVICE_SHORT[svc.service] || svc.service) +
+      ' &middot; ' + esc(SERVICE_SHORT[svc.service] || svc.service) + (timeText(svc) ? ' &middot; ' + esc(timeText(svc)) : '') +
       (isNext ? '<span class="badge">Next</span>' : '') + '</h2>' +
       '<span class="when">' + esc(rel) + '</span></div>' +
       (serviceNote(svc) ? '<div class="svc-note' + (off ? ' is-cancelled' : '') + '">' + esc(serviceNote(svc)) + '</div>' : '') +
@@ -601,7 +607,7 @@
         '<button type="button" class="row" data-act="toggle" aria-expanded="' + open + '">' +
         '<div class="day"><b>' + parseDate(s.date).getDate() + '</b><small>' + esc(fmt(s.date, { weekday: 'short' })) + '</small></div>' +
         '<div class="what"><b>' + esc(roles.join(', ')) + (out ? '<span class="pill-out">Out</span>' : '') + '</b><span>' +
-        esc(SERVICE_LABEL[s.service] || s.service) + (rel ? ' &middot; ' + esc(rel) : '') + '</span>' +
+        esc(serviceName(s)) + (timeText(s) ? ' &middot; ' + esc(timeText(s)) : '') + (rel ? ' &middot; ' + esc(rel) : '') + '</span>' +
         (serviceNote(s) ? '<span class="what-note">' + esc(serviceNote(s)) + '</span>' : '') + '</div>' +
         '<span class="chev" aria-hidden="true">&rsaquo;</span></button>' +
         (off ? '' : actions(i, out)) +
@@ -615,13 +621,14 @@
     const btns = out
       ? '<span class="note">You told ' + esc(CONTACT_NAME) + ' you’ll be out.</span>' +
         '<button type="button" class="act" data-act="undo" data-i="' + i + '">Undo</button>'
-      : '<a class="act" href="' + esc(googleUrl(eventFor(mine[i]))) + '" target="_blank" rel="noopener">Add to Calendar</a>' +
+      : (eventFor(mine[i]) ? '<a class="act" href="' + esc(googleUrl(eventFor(mine[i]))) + '" target="_blank" rel="noopener">Add to Calendar</a>' : '') +
         '<button type="button" class="act warn" data-act="out" data-i="' + i + '">I’ll be out</button>';
     return '<div class="acts">' + btns + '</div>';
   }
 
   function renderFilters() {
-    const kinds = ['All', ...Object.keys(SERVICE_LABEL).filter((k) => services.some((s) => s.service === k))];
+    const others = [...new Set(services.map((s) => s.service))].filter((k) => !SERVICE_LABEL[k]);
+    const kinds = ['All', ...Object.keys(SERVICE_LABEL).filter((k) => services.some((s) => s.service === k)), ...others];
     $('#filters').innerHTML = kinds.map((k) =>
       '<button type="button" data-k="' + esc(k) + '" aria-pressed="' + (k === filter) + '">' + esc(k) + '</button>').join('');
   }
@@ -661,12 +668,31 @@
   }
   const stamp = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 
+  // "6:00 PM", "6 pm", "6:00-7:15 PM" -> { h, m, minutes }, or null if there's no time.
+  function parseTime(text) {
+    const found = [...String(text).matchAll(/(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?\s*m?\.?/gi)].slice(0, 2);
+    if (!found.length || +found[0][1] > 12) return null;
+    const half = found.map((f) => (f[3] || '').toLowerCase());
+    const fallback = half[half.length - 1] || half[0];
+    const toMin = (f, ap) => {
+      const h = +f[1] % 12;
+      const pm = (ap || fallback || (h >= 1 && h <= 9 ? 'p' : 'a')) === 'p';
+      return (h + (pm ? 12 : 0)) * 60 + +(f[2] || 0);
+    };
+    const start = toMin(found[0], half[0]);
+    const end = found[1] ? toMin(found[1], half[1]) : 0;
+    return { h: Math.floor(start / 60), m: start % 60, minutes: end > start ? end - start : 60 };
+  }
+  const timeFor = (svc) => SERVICE_TIME[svc.service] || parseTime(timeText(svc));
+
+  // null when the service has no time yet (a one-time service with its Time row blank).
   function eventFor(x) {
-    const t = SERVICE_TIME[x.s.service] || { h: 10, m: 0, minutes: 60 };
+    const t = timeFor(x.s);
+    if (!t) return null;
     const start = churchTime(x.s.date, t.h, t.m);
     return {
       uid: x.s.date + '-' + x.s.service.replace(/\W+/g, '').toLowerCase() + '-' + norm(currentName()).replace(/\W+/g, '-') + '@grace-music',
-      title: x.roles.join(', ') + ' · ' + (SERVICE_LABEL[x.s.service] || x.s.service) + (serviceNote(x.s) ? ' · ' + serviceNote(x.s) : ''),
+      title: x.roles.join(', ') + ' · ' + serviceName(x.s) + (serviceNote(x.s) ? ' · ' + serviceNote(x.s) : ''),
       start,
       end: new Date(start.getTime() + t.minutes * 60000),
       details: 'Grace Baptist Church music and media schedule:\n' + PAGE_URL,
@@ -689,6 +715,7 @@
     const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Grace Baptist Church//Music Schedule//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
     list.forEach((x) => {
       const ev = eventFor(x);
+      if (!ev) return;
       lines.push('BEGIN:VEVENT', 'UID:' + ev.uid, 'DTSTAMP:' + now, 'DTSTART:' + stamp(ev.start), 'DTEND:' + stamp(ev.end),
         'SUMMARY:' + txt(ev.title), 'DESCRIPTION:' + txt(ev.details), 'LOCATION:' + txt(LOCATION), 'END:VEVENT');
     });
@@ -774,7 +801,7 @@
     const x = mine[Number(b.dataset.i)];
     if (!x) return;
     const going = b.dataset.act === 'out';
-    const when = (SERVICE_LABEL[x.s.service] || x.s.service) + ', ' + fmt(x.s.date, { month: 'short', day: 'numeric' });
+    const when = serviceName(x.s) + ', ' + fmt(x.s.date, { month: 'short', day: 'numeric' });
     if (going) {
       const ok = await dialog({
         title: 'Out for ' + when + '?',
