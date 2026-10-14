@@ -18,6 +18,12 @@
  * tab (which turns that person's cells red for that one service) and emails
  * the script's owner. Undo removes the row again.
  *
+ * The order of service builder (builder.html) reads saved orders with
+ * doGet?orders=1 and saves them with doPost. Saving needs the ORDER_CODE
+ * script property, which setupOrderCode creates. Orders live on the Orders
+ * tab, one row per service ("2026-11-01|Sunday AM") or default
+ * ("template|Sunday AM"), as JSON.
+ *
  * It also adds a Music Schedule menu to the Sheet: one item puts the rotation
  * formulas back in selected cells, the other builds the next month's tab.
  */
@@ -33,9 +39,15 @@ const PAGE_NOTE = 'Volunteer page';  // Note column prefix on rows the page adds
 const MAX_POSTS = 40;                // "I'll be out" requests allowed per 10 minutes, across all phones
 const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
 
-/** GET: upcoming services, oldest first. */
-function doGet() {
+const ORDERS_SHEET = 'Orders';
+const ORDER_DAYS_BACK = 14;          // saved orders sent to the builder: two weeks back and everything ahead
+const MAX_ORDER_CHARS = 40000;       // one order's JSON; a busy service is well under 10,000
+const MAX_BAD_CODES = 20;            // wrong order codes allowed per 10 minutes
+
+/** GET: upcoming services, oldest first. With ?orders=1, the saved orders of service instead. */
+function doGet(e) {
   try {
+    if (e && e.parameter && e.parameter.orders) return json_(savedOrders_());
     return json_({ services: upcomingServices_(), rotation: rotation_(), updated: new Date().toISOString() });
   } catch (err) {
     return json_({ status: 'error', message: 'The schedule couldn’t be read. ' + err.message });
@@ -154,6 +166,7 @@ function doPost(e) {
     return json_({ status: 'error', message: 'That request didn’t make sense. Reload the page and try again.' });
   }
   try {
+    if (body && body.action === 'saveOrder') return json_(saveOrder_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -316,6 +329,85 @@ function underRateLimit_() {
 
 function clean_(s) {
   return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
+// ---------- Orders of service ----------
+
+/** Saved orders from two weeks back on, and the default orders, keyed like the Orders tab. */
+function savedOrders_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ORDERS_SHEET);
+  const out = { orders: {}, templates: {} };
+  if (!sheet || sheet.getLastRow() < 2) return out;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - ORDER_DAYS_BACK);
+  const fromKey = Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues().forEach((row) => {
+    const key = String(row[0]);
+    let order;
+    try { order = JSON.parse(row[2]); } catch (err) { return; }
+    if (key.indexOf('template|') === 0) out.templates[key.slice(9)] = order;
+    else if (key.slice(0, 10) >= fromKey) out.orders[key] = order;
+  });
+  return out;
+}
+
+/** POST {action: 'saveOrder', code, key, order}. A null order deletes the saved one. */
+function saveOrder_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const key = String(body.key || '');
+  if (!/^(\d{4}-\d{2}-\d{2}|template)\|[^|]{1,60}$/.test(key)) throw new Error('That order can’t be saved. Reload the page and try again.');
+  const json = body.order == null ? '' : JSON.stringify(body.order);
+  if (json.length > MAX_ORDER_CHARS) throw new Error('That order is too long to save.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(ORDERS_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(ORDERS_SHEET);
+      sheet.appendRow(['Key', 'Saved', 'Order (saved by the builder; don’t edit)']);
+      sheet.setFrozenRows(1);
+      sheet.getRange('A1:C1').setFontWeight('bold');
+    }
+    const last = sheet.getLastRow();
+    const keys = last > 1 ? sheet.getRange(2, 1, last - 1, 1).getValues().map((r) => String(r[0])) : [];
+    const i = keys.indexOf(key);
+    if (!json) {
+      if (i >= 0) sheet.deleteRow(i + 2);
+    } else if (i >= 0) {
+      sheet.getRange(i + 2, 2, 1, 2).setValues([[new Date(), json]]);
+    } else {
+      sheet.appendRow([key, new Date(), json]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return { status: 'ok', saved: new Date().toISOString() };
+}
+
+/** null if the code is right, otherwise the reply to send back. */
+function checkOrderCode_(code) {
+  const want = PropertiesService.getScriptProperties().getProperty('ORDER_CODE');
+  if (!want) throw new Error('Saving isn’t set up yet. In Apps Script, run setupOrderCode once.');
+  const cache = CacheService.getScriptCache();
+  const bad = Number(cache.get('badOrderCodes') || 0);
+  if (bad >= MAX_BAD_CODES) throw new Error('Too many wrong codes. Try again in 10 minutes.');
+  if (String(code || '').trim() === want) return null;
+  cache.put('badOrderCodes', String(bad + 1), 600);
+  return { status: 'badcode', message: 'That code isn’t right.' };
+}
+
+/** Run once from the editor: creates the order builder's code and prints it in the log. */
+function setupOrderCode() {
+  const props = PropertiesService.getScriptProperties();
+  let code = props.getProperty('ORDER_CODE');
+  if (!code) {
+    code = String(Math.floor(100000 + Math.random() * 900000));
+    props.setProperty('ORDER_CODE', code);
+  }
+  console.log('Order of service code: ' + code);
 }
 
 // ---------- Sheet menu ----------

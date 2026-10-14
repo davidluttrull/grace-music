@@ -87,3 +87,30 @@ When `Code.gs` changes, paste the new version into Apps Script and save, then re
 Emails go to the account that owns the script. To send them somewhere else, open **Project Settings** (the gear icon), and under **Script Properties** add `NOTIFY_EMAIL` with the address.
 
 Anyone with the page's link can press "I'll be out", but only for names that are on that service, and every report emails you. If someone misuses it, delete their rows on the Away tab.
+
+## Order of service builder
+
+The builder makes the printed order of service from the same Sheet. Open <https://davidluttrull.github.io/grace-music/builder.html> on your computer (it's laid out for a computer screen, not a phone).
+
+### Turning it on (one time)
+
+1. Paste the new `Code.gs` into Apps Script and save.
+2. In the function dropdown, pick **setupOrderCode** and click **Run**. Open **Execution log**: the last line reads **Order of service code: 123456** with your own number. Keep it; the builder asks for it the first time you save, and that computer remembers it. Running it again shows the same code.
+3. Click **Deploy → Manage deployments**, the pencil icon, **New version**, then **Deploy**.
+
+To change the code, edit **ORDER_CODE** under **Project Settings → Script Properties**.
+
+### Each week
+
+1. Pick the date at the top. A Sunday sheet has the morning and evening services; a Wednesday or a one-time service gets its own sheet. Cancelled services are left off.
+2. Each service starts from its default order with that week's songs, prelude, offering, special, and team filled in from the Sheet. Those show in gray with "from Song 1" (or similar) beside them. Type over one to change it on this sheet only; clear it to go back to the Sheet's value. Changes in the Sheet show up in the builder until you type over them.
+3. Add verse notes ("all 4", "1, 3-4") in each hymn's Verses box. Hymn numbers and a "*New*" at the start of a song title come from the Sheet automatically.
+4. Drag ⠿ to reorder. **Add** puts in a hymn, special song, choir, missionary presentation, Scripture reading, Communion, and more, just above the closing song. ● leaves an item off the sheet without deleting it; ✕ removes it.
+5. **Show team credits** turns the Music, Singers, and Media list on or off. Services with no song leader in the Sheet (Sunday evening) have a Song leader box.
+6. The preview shows the half sheet exactly as it prints. If a week runs long, the text shrinks a little to fit; if it still doesn't fit, the preview says so.
+7. **Save** stores the sheet on the **Orders** tab, so you can finish it later or on another computer. Until you save, changes are kept on the computer you're using.
+8. **Print** prints two copies side by side on one landscape letter page; cut it in half. Use Chrome, leave Scale at 100%, and turn off Headers and footers. To keep a PDF for your Drive folder, choose **Save as PDF** as the printer.
+
+**Make this the default** saves a service's current order as the starting point for every new sheet of that kind (Sunday morning, Sunday evening, Wednesday, or one-time services). Verses and changed schedule values aren't carried into the default. **Start over** throws away this sheet's changes to that service and starts from the default again.
+
+Don't edit the Orders tab by hand; the builder reads and writes it.

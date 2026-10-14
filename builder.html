@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order of Service Builder</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand: #7BAE58;
+    --brand-deep: #233617;
+    --brand-mid: #4E7A35;
+    --bg: #F3F8EF;
+    --card: #FFFFFF;
+    --ink: #1E2A16;
+    --muted: #5B6A50;
+    --line: #DCE7D3;
+    --tint: #EFF6EA;
+    --tint-line: #C6DBB6;
+    --danger: #B3261E;
+    --warn-bg: #FFF2CC;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 'Poppins', system-ui, sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  /* ---------- Top bar ---------- */
+  .bar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+    padding: 10px 18px;
+    background: var(--brand-deep); color: #fff;
+  }
+  .bar h1 { margin: 0 8px 0 0; font-size: 16px; font-weight: 600; }
+  .bar select { min-height: 36px; border-radius: 8px; border: 0; padding: 0 10px; color: var(--ink); min-width: 260px; }
+  .bar .spacer { flex: 1; }
+  .bar .status { font-size: 13px; color: #CFE3C0; }
+  .bar .status.dirty { color: #FFE7A3; }
+  .btn { min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--tint-line); background: var(--card); color: var(--ink); font-weight: 500; }
+  .btn.primary { background: var(--brand); border-color: var(--brand); color: #10160C; }
+  .btn.small { min-height: 30px; padding: 0 10px; font-size: 13px; }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .bar .btn { border-color: transparent; }
+
+  /* ---------- Layout ---------- */
+  .layout { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(360px, 560px); gap: 18px; padding: 18px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 16px; overflow: hidden; }
+  .panel-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; background: var(--tint); border-bottom: 1px solid var(--line); }
+  .panel-head h2 { margin: 0; font-size: 15px; font-weight: 600; flex: 1; }
+  .panel-head .sub { font-size: 12px; color: var(--muted); width: 100%; }
+  .panel-body { padding: 10px 12px 12px; }
+  .msg { margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); font-size: 13px; }
+  .msg.error { background: #FCE4E4; color: var(--danger); }
+
+  /* ---------- Items ---------- */
+  .items { list-style: none; margin: 0; padding: 0; }
+  .item { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 6px 6px 2px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--card); }
+  .item.off { opacity: .45; }
+  .item.drop-before { box-shadow: 0 -3px 0 var(--brand); }
+  .item.drop-after { box-shadow: 0 3px 0 var(--brand); }
+  .item.dragging { opacity: .3; }
+  .handle { grid-row: span 2; align-self: stretch; display: flex; align-items: center; justify-content: center; cursor: grab; color: #9aa59a; font-size: 16px; user-select: none; }
+  .row1, .row2 { display: flex; gap: 6px; min-width: 0; }
+  .item input { min-width: 0; height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; background: #fff; font-size: 13px; }
+  .item input:focus { outline: 2px solid var(--brand); outline-offset: 0; border-color: transparent; }
+  .item .label { flex: 0 0 34%; font-weight: 600; }
+  .item .note { flex: 1; }
+  .item .value { flex: 1; }
+  .item .verses { flex: 0 0 90px; }
+  .item .value.linked::placeholder { color: var(--ink); opacity: .55; }
+  .tools { grid-row: span 2; display: flex; flex-direction: column; gap: 4px; }
+  .icon { width: 30px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--muted); font-size: 13px; line-height: 1; }
+  .icon:hover { border-color: var(--tint-line); color: var(--ink); }
+  .from { font-size: 11px; color: var(--brand-mid); white-space: nowrap; align-self: center; }
+  .add-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .add-row select { height: 32px; border-radius: 8px; border: 1px solid var(--tint-line); padding: 0 8px; background: #fff; }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 13px; }
+  .opts label { display: inline-flex; gap: 6px; align-items: center; }
+  .opts input[type=text] { height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; width: 170px; }
+
+  /* ---------- Preview ---------- */
+  .preview { position: sticky; top: 74px; }
+  .preview-head { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 8px; font-size: 13px; color: var(--muted); }
+  .fit-warn { color: var(--danger); font-weight: 500; }
+  .paper-wrap { background: #d9dfd5; border-radius: 12px; padding: 14px; overflow: hidden; }
+  .paper-scale { transform-origin: top left; }
+  .paper { width: 5.5in; height: 8.5in; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+
+  /* ---------- The half sheet (screen preview and print) ---------- */
+  .half { width: 5.5in; height: 8.5in; padding: 0.38in 0.42in 0.3in; display: flex; flex-direction: column; color: #000; font-family: 'Source Sans 3', 'Segoe UI', sans-serif; }
+  .half-body { flex: 1; min-height: 0; overflow: hidden; font-size: calc(10.5pt * var(--s, 1)); line-height: 1.32; }
+  .svc + .svc { margin-top: 1.05em; }
+  .svc-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1.5pt solid #000; padding-bottom: .15em; margin-bottom: .35em; }
+  .svc-hd b { font-size: 1.45em; font-weight: 700; letter-spacing: .005em; }
+  .svc-hd span { font-size: .9em; font-weight: 600; color: #333; text-align: right; }
+  .ln { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: .07em 0; }
+  .ln .l { color: #333; }
+  .ln .l i { color: #000; }
+  .ln .r { text-align: right; }
+  .song { font-weight: 700; font-style: italic; }
+  .num { display: inline-block; min-width: 1.7em; padding: 0 .25em; margin-right: .3em; border: .6pt solid #555; border-radius: 3px; font-style: normal; font-weight: 600; font-size: .85em; text-align: center; line-height: 1.3; }
+  .new { display: inline-block; padding: 0 .25em; margin-right: .3em; border: .6pt solid #000; border-radius: 3px; font-style: normal; font-weight: 700; font-size: .72em; letter-spacing: .04em; vertical-align: .1em; }
+  .vv { font-style: normal; font-weight: 400; color: #555; font-size: .85em; margin-left: .2em; }
+  .credits { margin-top: .45em; padding-top: .3em; border-top: .5pt solid #999; font-size: .8em; line-height: 1.3; }
+  .cg-h { font-size: .78em; font-weight: 700; letter-spacing: .1em; margin: .35em 0 .1em; border-bottom: .4pt solid #bbb; }
+  .cg-h:first-child { margin-top: 0; }
+  .cg { display: grid; grid-template-columns: auto 1fr auto 1fr; column-gap: .5em; row-gap: .05em; }
+  .cg .k { text-align: right; color: #555; font-size: .82em; text-transform: uppercase; letter-spacing: .06em; padding-top: .1em; white-space: nowrap; }
+  .half-foot { display: flex; justify-content: center; padding-top: .12in; }
+  .half-foot img { height: 0.42in; filter: brightness(0); }
+
+  /* ---------- Print: two copies side by side on letter landscape ---------- */
+  #printArea { display: none; }
+  @page { size: letter landscape; margin: 0; }
+  @media print {
+    body { background: #fff; }
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: flex !important; width: 11in; height: 8.5in; }
+    #printArea .half { break-inside: avoid; }
+  }
+
+  dialog { border: 0; border-radius: 14px; padding: 20px; width: min(360px, 92vw); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(16, 22, 12, .5); }
+  dialog h3 { margin: 0 0 6px; font-size: 16px; }
+  dialog p { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+  dialog input { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font-size: 16px; letter-spacing: .15em; }
+  dialog .err { color: var(--danger); font-size: 13px; min-height: 18px; margin: 6px 0 0; }
+  dialog .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>Order of Service</h1>
+    <select id="date" aria-label="Date"></select>
+    <span class="spacer"></span>
+    <span class="status" id="status"></span>
+    <button type="button" class="btn" id="saveBtn">Save</button>
+    <button type="button" class="btn primary" id="printBtn">Print</button>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div id="notice"></div>
+      <div id="editor"></div>
+    </div>
+    <div class="preview">
+      <div class="preview-head"><span>Prints twice, side by side, on letter paper (landscape).</span><span id="fit"></span></div>
+      <div class="paper-wrap" id="paperWrap"><div class="paper-scale" id="paperScale"><div class="paper"><div class="half" id="half"></div></div></div></div>
+    </div>
+  </div>
+
+  <div id="printArea"></div>
+
+  <dialog id="codeDialog">
+    <form method="dialog" id="codeForm">
+      <h3>Enter your code</h3>
+      <p>Saving changes the Orders tab in the Music Schedule Sheet. The code is in Apps Script (see SETUP.md). This computer remembers it.</p>
+      <input id="codeInput" inputmode="numeric" autocomplete="off" aria-label="Code">
+      <p class="err" id="codeErr"></p>
+      <div class="btns"><button type="button" class="btn" id="codeCancel">Cancel</button><button class="btn primary" id="codeOk">Save</button></div>
+    </form>
+  </dialog>
+
+<script>
+  // Same Apps Script web app as the volunteer page.
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyN_FOd4twDKmMrDk5l3NqTmKRJrKhIC3kUgkuumCKGoxK_wlkFxZlWevtGUyPtSnPE8Q/exec';
+  const CODE_KEY = 'gbc-oos-code';
+  const DRAFT_PREFIX = 'gbc-oos-draft|';
+  const PASTOR = 'Pastor Daniel Stevens';
+
+  const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];
+  const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
+  const CANCELLED = /cancel|^\s*no\b.*\bservice/i;
+
+  // ---------- Default orders (until you save your own with "Make this the default") ----------
+  const text = (label, more) => Object.assign({ kind: 'text', label, note: '', value: '', verses: '', source: '', hidden: false, italic: false }, more);
+  const song = (label, source) => text(label, { kind: 'song', source });
+  const DEFAULT_ORDERS = {
+    'Sunday AM': [
+      text('Prelude', { source: 'Prelude' }),
+      text('Announcement Video', { value: 'Media Booth' }),
+      song('Hymn', 'Song 1'),
+      song('Hymn', 'Song 2'),
+      text('Scripture Reading'),
+      text('Offering', { source: 'Offering' }),
+      song('Hymn', 'Song 3'),
+      song('Hymn', 'Song 4'),
+      song('Hymn', 'Song 5'),
+      text('Special', { source: 'Special', italic: true }),
+      text('Message', { value: PASTOR }),
+      song('Closing', 'Closing'),
+    ],
+    'Sunday PM': [
+      text('Prelude', { source: 'Prelude' }),
+      song('Hymn', 'Song 1'),
+      text('Announcements / Prayer'),
+      song('Hymn', 'Song 2'),
+      song('Hymn', 'Song 3'),
+      text('Sermon', { value: PASTOR }),
+      song('Closing Hymn', 'Closing'),
+    ],
+    'Wednesday': [
+      song('Hymn', 'Song 1'),
+      song('Hymn', 'Song 2'),
+      song('Hymn', 'Song 3'),
+      text('Prayer Time'),
+      text('Bible Study', { value: PASTOR }),
+      song('Closing', 'Closing'),
+    ],
+  };
+  DEFAULT_ORDERS['One-time'] = DEFAULT_ORDERS['Sunday AM'];
+
+  // "Add" menu
+  const PRESETS = {
+    'Hymn': () => song('Hymn', ''),
+    'Special Song': () => text('Special', { italic: true }),
+    'Choir': () => text('Choir', { italic: true }),
+    'Missionary Presentation': () => text('Missionary Presentation'),
+    'Scripture Reading': () => text('Scripture Reading'),
+    'Message': () => text('Message', { value: PASTOR }),
+    'Communion': () => text('Communion', { value: PASTOR }),
+    'Announcements': () => text('Announcements'),
+    'Prayer': () => text('Prayer'),
+    'Offering': () => text('Offering', { source: 'Offering' }),
+    'Baptism': () => text('Baptism'),
+    'Something else': () => text('New item'),
+  };
+
+  // Team credits: [schedule role, printed label]
+  const MUSIC = [['Leading', 'Leader'], ['Song Leading', 'Leader'], ['Piano', 'Piano'], ['Synth', 'Synth'], ['Strings', 'Strings'],
+    ['Guitar', 'Guitar'], ['Electric Guitar', 'E. Guitar'], ['Bass Guitar', 'Bass']];
+  const SINGER_ROWS = [['Soprano', 'Tenor'], ['Alto', 'Bass'], ['Alt (Women)', 'Alt (Men)']];
+  const SINGER_LABEL = { 'Alt (Women)': 'Alt', 'Alt (Men)': 'Alt' };
+  const MEDIA = [['Slides', 'Slides'], ['House Audio', 'House'], ['Livestream Audio', 'Stream'], ['Video Mixer', 'Video']];
+
+  const $ = (sel) => document.querySelector(sel);
+  let services = [];
+  let saved = { orders: {}, templates: {} };
+  let sheet = [];      // [{ svc, key, order, dirty }] for the chosen date
+  let cancelled = [];  // services on the chosen date that are cancelled
+  let uid = 0;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function store(fn) { try { return fn(window.localStorage); } catch (e) { return null; } }
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  function parseDate(key) { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); }
+  const fmt = (key, opts) => parseDate(key).toLocaleDateString('en-US', opts);
+
+  // ---------- Schedule data ----------
+  const roleValue = (svc, role) => ((svc.items.find((it) => it.role === role) || {}).value || '');
+  const serviceNote = (svc) => roleValue(svc, 'Service Notes');
+  const templateType = (svc) => (SERVICES.includes(svc.service) ? svc.service : 'One-time');
+  const isCancelled = (svc) => CANCELLED.test(serviceNote(svc));
+
+  // "43 Rejoice the Lord Is King", "*New* I Set My Hope on Jesus"
+  function parseSong(textValue) {
+    let t = String(textValue || '').trim();
+    const isNew = /^\*?\s*new\s*\*?\s*/i.test(t);
+    if (isNew) t = t.replace(/^\*?\s*new\s*\*?\s*/i, '');
+    const m = /^(\d{1,4})\s+(.+)$/.exec(t);
+    return { isNew, num: m ? m[1] : '', title: m ? m[2] : t };
+  }
+
+  const shown = (item, svc) => item.value || (item.source ? roleValue(svc, item.source) : '');
+  // Linked items with nothing on the schedule (an empty Song 5) are left off the sheet.
+  const prints = (item, svc) => !item.hidden && !(item.source && !shown(item, svc));
+
+  // ---------- Building a sheet for a date ----------
+  function freshOrder(svc) {
+    const type = templateType(svc);
+    const items = clone((saved.templates[type] && saved.templates[type].items) || DEFAULT_ORDERS[type]);
+    items.forEach((it) => { it.id = ++uid; });
+    return { items, leader: '', credits: true };
+  }
+
+  function loadOrder(svc, key) {
+    const fromSheet = saved.orders[key];
+    const draft = JSON.parse(store((s) => s.getItem(DRAFT_PREFIX + key)) || 'null');
+    let order, dirty = false;
+    if (draft && (!fromSheet || (draft.at || 0) > (fromSheet.savedAt || 0))) { order = draft.order; dirty = true; }
+    else if (fromSheet) order = clone(fromSheet);
+    else order = freshOrder(svc);
+    order.items.forEach((it) => { it.id = ++uid; });
+    return { order, dirty };
+  }
+
+  function chooseDate(dateKey) {
+    const onDate = services.filter((s) => s.date === dateKey);
+    cancelled = onDate.filter(isCancelled);
+    sheet = onDate.filter((s) => !isCancelled(s)).map((svc) => {
+      const key = svc.date + '|' + svc.service;
+      return Object.assign({ svc, key }, loadOrder(svc, key));
+    });
+    renderEditor();
+    renderPreview();
+    renderStatus();
+  }
+
+  function renderDates() {
+    const dates = [...new Set(services.map((s) => s.date))];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const current = $('#date').value;
+    $('#date').innerHTML = dates.map((d) => {
+      const names = services.filter((s) => s.date === d).map((s) => s.service).join(', ');
+      const done = services.some((s) => s.date === d && saved.orders[d + '|' + s.service]);
+      return '<option value="' + d + '">' + esc(fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })) + ' · ' + esc(names) + (done ? '  ✓ saved' : '') + '</option>';
+    }).join('');
+    const firstUpcoming = dates.find((d) => parseDate(d) >= today) || dates[0];
+    $('#date').value = dates.includes(current) ? current : firstUpcoming;
+  }
+
+  // ---------- Editor ----------
+  function renderEditor() {
+    $('#notice').innerHTML = cancelled.map((svc) =>
+      '<p class="msg">' + esc(SERVICE_LABEL[svc.service] || svc.service) + ' is cancelled (' + esc(serviceNote(svc)) + '), so it’s left off the sheet.</p>').join('');
+    if (!sheet.length) {
+      $('#editor').innerHTML = '<p class="msg">There’s no service to print on this date.</p>';
+      return;
+    }
+    $('#editor').innerHTML = sheet.map((part, p) => {
+      const svc = part.svc;
+      const needsLeader = !roleValue(svc, 'Leading') && !roleValue(svc, 'Song Leading');
+      return '<section class="panel" data-p="' + p + '">' +
+        '<div class="panel-head"><h2>' + esc(SERVICE_LABEL[svc.service] || svc.service) + '</h2>' +
+        '<button type="button" class="btn small" data-act="default">Make this the default</button>' +
+        '<button type="button" class="btn small" data-act="reset">Start over</button>' +
+        '<span class="sub">Gray text comes from the schedule; type over it to change just this sheet. Drag ⠿ to reorder.</span></div>' +
+        '<div class="panel-body"><ol class="items">' + part.order.items.map((it, i) => itemRow(it, i, svc)).join('') + '</ol>' +
+        '<div class="add-row"><select data-act="addType" aria-label="Item to add">' +
+        Object.keys(PRESETS).map((k) => '<option>' + esc(k) + '</option>').join('') +
+        '</select><button type="button" class="btn small" data-act="add">Add</button></div>' +
+        '<div class="opts"><label><input type="checkbox" data-act="credits"' + (part.order.credits !== false ? ' checked' : '') + '> Show team credits</label>' +
+        (needsLeader ? '<label>Song leader <input type="text" data-act="leader" value="' + esc(part.order.leader || '') + '" placeholder="Name"></label>' : '') +
+        '</div></div></section>';
+    }).join('');
+  }
+
+  function itemRow(it, i, svc) {
+    const fromSchedule = it.source ? roleValue(svc, it.source) : '';
+    const placeholder = it.source ? (fromSchedule || 'Not on the schedule (left off)') : (it.kind === 'song' ? 'Song' : 'Name');
+    return '<li class="item' + (it.hidden ? ' off' : '') + '" data-i="' + i + '">' +
+      '<span class="handle" title="Drag to move" aria-hidden="true">⠿</span>' +
+      '<div class="row1"><input class="label" data-f="label" value="' + esc(it.label) + '" aria-label="Item">' +
+      '<input class="note" data-f="note" value="' + esc(it.note) + '" placeholder="' + (it.italic ? 'Song title (optional)' : 'Detail (optional)') + '" aria-label="Detail"></div>' +
+      '<div class="tools"><button type="button" class="icon" data-act="hide" title="' + (it.hidden ? 'Show on sheet' : 'Leave off sheet') + '">' + (it.hidden ? '◌' : '●') + '</button>' +
+      '<button type="button" class="icon" data-act="remove" title="Remove">✕</button></div>' +
+      '<div class="row2"><input class="value' + (it.source && !it.value ? ' linked' : '') + '" data-f="value" value="' + esc(it.value) + '" placeholder="' + esc(placeholder) + '" aria-label="' + (it.kind === 'song' ? 'Song' : 'Person') + '">' +
+      (it.kind === 'song' ? '<input class="verses" data-f="verses" value="' + esc(it.verses) + '" placeholder="Verses" aria-label="Verses">' : '') +
+      (it.source ? '<span class="from">' + (it.value ? 'changed' : 'from ' + esc(it.source)) + '</span>' : '') +
+      '</div></li>';
+  }
+
+  function partOf(el) { const p = el.closest('[data-p]'); return p ? sheet[Number(p.dataset.p)] : null; }
+
+  function changed(part) {
+    part.dirty = true;
+    store((s) => s.setItem(DRAFT_PREFIX + part.key, JSON.stringify({ at: Date.now(), order: part.order })));
+    renderPreview();
+    renderStatus();
+  }
+
+  $('#editor').addEventListener('input', (e) => {
+    const part = partOf(e.target);
+    if (!part) return;
+    const li = e.target.closest('.item');
+    if (li && e.target.dataset.f) {
+      const it = part.order.items[Number(li.dataset.i)];
+      it[e.target.dataset.f] = e.target.value;
+      if (e.target.dataset.f === 'value') {
+        e.target.classList.toggle('linked', !!it.source && !it.value);
+        const from = li.querySelector('.from');
+        if (from) from.textContent = it.value ? 'changed' : 'from ' + it.source;
+      }
+    } else if (e.target.dataset.act === 'leader') {
+      part.order.leader = e.target.value;
+    } else if (e.target.dataset.act === 'credits') {
+      part.order.credits = e.target.checked;
+    } else return;
+    changed(part);
+  });
+
+  $('#editor').addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    const part = partOf(b);
+    const li = b.closest('.item');
+    const items = part.order.items;
+    const act = b.dataset.act;
+    if (act === 'remove') items.splice(Number(li.dataset.i), 1);
+    else if (act === 'hide') { const it = items[Number(li.dataset.i)]; it.hidden = !it.hidden; }
+    else if (act === 'add') {
+      const it = PRESETS[b.parentElement.querySelector('select').value]();
+      it.id = ++uid;
+      // New items go just before the closing song, where specials usually land.
+      const closing = items.findIndex((x) => /closing/i.test(x.label));
+      items.splice(closing >= 0 ? closing : items.length, 0, it);
+    } else if (act === 'reset') {
+      if (!confirm('Start this service over from the default order? Your changes to it on this sheet will be lost.')) return;
+      part.order = freshOrder(part.svc);
+      store((s) => s.removeItem(DRAFT_PREFIX + part.key));
+    } else if (act === 'default') {
+      await saveDefault(part);
+      return;
+    }
+    renderEditor();
+    changed(part);
+  });
+
+  // ---------- Drag and drop ----------
+  let drag = null;
+  $('#editor').addEventListener('mousedown', (e) => {
+    const handle = e.target.closest('.handle');
+    if (handle) handle.closest('.item').draggable = true;
+  });
+  $('#editor').addEventListener('dragstart', (e) => {
+    const li = e.target.closest('.item');
+    if (!li) return;
+    drag = { part: partOf(li), from: Number(li.dataset.i) };
+    li.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+  });
+  $('#editor').addEventListener('dragover', (e) => {
+    const li = e.target.closest('.item');
+    if (!drag || !li || partOf(li) !== drag.part) return;
+    e.preventDefault();
+    document.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after'));
+    const r = li.getBoundingClientRect();
+    li.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-before' : 'drop-after');
+  });
+  $('#editor').addEventListener('drop', (e) => {
+    const li = e.target.closest('.item');
+    if (!drag || !li || partOf(li) !== drag.part) return;
+    e.preventDefault();
+    const items = drag.part.order.items;
+    let to = Number(li.dataset.i) + (li.classList.contains('drop-after') ? 1 : 0);
+    const [moved] = items.splice(drag.from, 1);
+    if (drag.from < to) to--;
+    items.splice(to, 0, moved);
+    const part = drag.part;
+    drag = null;
+    renderEditor();
+    changed(part);
+  });
+  $('#editor').addEventListener('dragend', () => {
+    document.querySelectorAll('.item').forEach((x) => { x.draggable = false; x.classList.remove('dragging', 'drop-before', 'drop-after'); });
+    drag = null;
+  });
+
+  // ---------- The half sheet ----------
+  function songHtml(value, verses) {
+    const s = parseSong(value);
+    return '<span class="song">' + (s.isNew ? '<span class="new">NEW</span>' : '') +
+      (s.num ? '<span class="num">' + esc(s.num) + '</span>' : '') + esc(s.title) + '</span>' +
+      (verses ? '<span class="vv">' + esc(verses) + '</span>' : '');
+  }
+
+  function lineHtml(it, svc) {
+    const value = shown(it, svc);
+    const left = esc(it.label) + (it.note ? ' · ' + (it.italic ? '<i>' + esc(it.note) + '</i>' : esc(it.note)) : '');
+    const right = it.kind === 'song' ? songHtml(value, it.verses) : esc(value);
+    return '<div class="ln"><span class="l">' + left + '</span><span class="r">' + right + '</span></div>';
+  }
+
+  function grid(pairs) {
+    return '<div class="cg">' + pairs.map(([k, v]) => k ? '<span class="k">' + esc(k) + '</span><span>' + esc(v) + '</span>' : '<span></span><span></span>').join('') + '</div>';
+  }
+
+  function creditsHtml(part) {
+    const svc = part.svc;
+    const music = [];
+    MUSIC.forEach(([role, label]) => { const v = roleValue(svc, role); if (v) music.push([label, v]); });
+    if (!music.some(([k]) => k === 'Leader') && part.order.leader) music.unshift(['Leader', part.order.leader]);
+    const singers = [];
+    SINGER_ROWS.forEach((row) => {
+      const cells = row.map((role) => { const v = roleValue(svc, role); return v ? [SINGER_LABEL[role] || role, v] : [null, '']; });
+      if (cells.some(([k]) => k)) singers.push(...cells);
+    });
+    const media = [];
+    MEDIA.forEach(([role, label]) => { const v = roleValue(svc, role); if (v) media.push([label, v]); });
+    const groups = [['MUSIC', music], ['SINGERS', singers], ['MEDIA', media]].filter(([, list]) => list.length);
+    if (!groups.length) return '';
+    return '<div class="credits">' + groups.map(([h, list]) => '<div class="cg-h">' + h + '</div>' + grid(list)).join('') + '</div>';
+  }
+
+  function headerRight(svc) {
+    const parts = [fmt(svc.date, { month: 'long', day: 'numeric', year: 'numeric' })];
+    const time = roleValue(svc, 'Time');
+    if (time) parts.push(time);
+    const note = serviceNote(svc);
+    if (note) parts.push(note);
+    return parts.join(' · ');
+  }
+
+  function halfHtml() {
+    const body = sheet.map((part) => {
+      const svc = part.svc;
+      return '<section class="svc"><div class="svc-hd"><b>' + esc(SERVICE_LABEL[svc.service] || svc.service) + '</b><span>' + esc(headerRight(svc)) + '</span></div>' +
+        part.order.items.filter((it) => prints(it, svc)).map((it) => lineHtml(it, svc)).join('') +
+        (part.order.credits !== false ? creditsHtml(part) : '') + '</section>';
+    }).join('');
+    return '<div class="half-body">' + body + '</div><div class="half-foot"><img src="logo.png" alt="Grace Baptist Church"></div>';
+  }
+
+  // Shrink the text a little at a time until everything fits on the half sheet.
+  function fit(half) {
+    const body = half.querySelector('.half-body');
+    let s = 1;
+    body.style.setProperty('--s', s);
+    while (body.scrollHeight > body.clientHeight + 1 && s > 0.7) {
+      s = Math.round((s - 0.02) * 100) / 100;
+      body.style.setProperty('--s', s);
+    }
+    return { s, fits: body.scrollHeight <= body.clientHeight + 1 };
+  }
+
+  let lastFit = { s: 1, fits: true };
+  function renderPreview() {
+    const half = $('#half');
+    half.innerHTML = halfHtml();
+    lastFit = fit(half);
+    $('#fit').innerHTML = !lastFit.fits ? '<span class="fit-warn">Too long for a half sheet. Leave something off.</span>'
+      : lastFit.s < 1 ? 'Text shrunk to ' + Math.round(lastFit.s * 100) + '% to fit' : '';
+    scalePreview();
+  }
+
+  function scalePreview() {
+    const wrap = $('#paperWrap');
+    const k = Math.min(1, (wrap.clientWidth - 28) / (5.5 * 96));
+    $('#paperScale').style.transform = 'scale(' + k + ')';
+    $('#paperScale').style.height = (8.5 * 96 * k) + 'px';
+    $('#paperScale').style.width = (5.5 * 96 * k) + 'px';
+  }
+  window.addEventListener('resize', scalePreview);
+
+  function print() {
+    const copy = $('#half').outerHTML.replace(' id="half"', '');
+    $('#printArea').innerHTML = copy + copy;
+    window.print();
+  }
+  $('#printBtn').onclick = print;
+  // Ctrl/Cmd+P prints the same two-up sheet.
+  window.addEventListener('beforeprint', () => {
+    if (!$('#printArea').innerHTML) { const copy = $('#half').outerHTML.replace(' id="half"', ''); $('#printArea').innerHTML = copy + copy; }
+  });
+  window.addEventListener('afterprint', () => { $('#printArea').innerHTML = ''; });
+
+  // ---------- Saving ----------
+  function renderStatus() {
+    const dirty = sheet.some((p) => p.dirty);
+    const anySaved = sheet.some((p) => saved.orders[p.key]);
+    $('#status').className = 'status' + (dirty ? ' dirty' : '');
+    $('#status').textContent = dirty ? 'Unsaved changes (kept on this computer)' : anySaved ? 'Saved' : 'Not saved yet';
+  }
+
+  function askCode(message) {
+    return new Promise((resolve) => {
+      const d = $('#codeDialog');
+      $('#codeErr').textContent = message || '';
+      $('#codeInput').value = '';
+      d.showModal();
+      $('#codeInput').focus();
+      $('#codeCancel').onclick = () => { d.close(); resolve(null); };
+      $('#codeForm').onsubmit = (e) => { e.preventDefault(); const v = $('#codeInput').value.trim(); d.close(); resolve(v || null); };
+    });
+  }
+
+  async function post(body) {
+    let res;
+    try {
+      const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
+      res = await r.json();
+    } catch (e) {
+      throw new Error('Couldn’t reach the Sheet. Check your connection and try again.');
+    }
+    if (res.status === 'error') throw new Error(res.message);
+    return res;
+  }
+
+  // Sends one save, asking for the code first if needed and again if it's wrong.
+  async function send(key, order) {
+    let code = store((s) => s.getItem(CODE_KEY));
+    let message = '';
+    for (;;) {
+      if (!code) code = await askCode(message);
+      if (!code) return false;
+      const res = await post({ action: 'saveOrder', code, key, order });
+      if (res.status === 'badcode') { store((s) => s.removeItem(CODE_KEY)); code = null; message = 'That code isn’t right. Try again.'; continue; }
+      store((s) => s.setItem(CODE_KEY, code));
+      return true;
+    }
+  }
+
+  async function save() {
+    const btn = $('#saveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      for (const part of sheet) {
+        const order = clone(part.order);
+        order.savedAt = Date.now();
+        order.items.forEach((it) => { delete it.id; });
+        if (!(await send(part.key, order))) return;
+        saved.orders[part.key] = order;
+        part.dirty = false;
+        store((s) => s.removeItem(DRAFT_PREFIX + part.key));
+      }
+      renderDates();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save';
+      renderStatus();
+    }
+  }
+  $('#saveBtn').onclick = save;
+
+  async function saveDefault(part) {
+    const type = templateType(part.svc);
+    const name = type === 'One-time' ? 'one-time services (like Christmas Eve)' : SERVICE_LABEL[type];
+    if (!confirm('Use this order as the starting point for every new ' + name + ' sheet? Verses and schedule changes are cleared from the default.')) return;
+    const items = clone(part.order.items).map((it) => {
+      delete it.id;
+      if (it.kind === 'song') { it.verses = ''; if (it.source) it.value = ''; }
+      return it;
+    });
+    try {
+      if (await send('template|' + type, { items })) {
+        saved.templates[type] = { items };
+        alert('Saved. New ' + name + ' sheets will start from this order.');
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (sheet.some((p) => p.dirty)) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // ---------- Start ----------
+  $('#date').onchange = () => chooseDate($('#date').value);
+
+  async function start() {
+    $('#status').textContent = 'Loading…';
+    try {
+      const [feed, orders] = await Promise.all([
+        fetch(API_URL, { cache: 'no-store' }).then((r) => r.json()),
+        fetch(API_URL + '?orders=1', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
+      if (feed.status === 'error') throw new Error(feed.message);
+      services = feed.services || [];
+      saved = { orders: orders.orders || {}, templates: orders.templates || {} };
+    } catch (err) {
+      $('#notice').innerHTML = '<p class="msg error">Couldn’t load the schedule: ' + esc(err.message) + '</p>';
+      $('#status').textContent = '';
+      return;
+    }
+    renderDates();
+    chooseDate($('#date').value);
+  }
+  document.fonts && document.fonts.ready.then(() => { if (sheet.length) renderPreview(); });
+  start();
+</script>
+</body>
+</html>
