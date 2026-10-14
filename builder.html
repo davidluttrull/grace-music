@@ -101,6 +101,7 @@
   .svc-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1.5pt solid #000; padding-bottom: .15em; margin-bottom: .35em; }
   .svc-hd b { font-size: 1.45em; font-weight: 700; letter-spacing: .005em; }
   .svc-hd span { font-size: .9em; font-weight: 600; color: #333; text-align: right; }
+  .lead { font-weight: 700; margin: -.1em 0 .3em; }
   .ln { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: .07em 0; }
   .ln .l { color: #333; }
   .ln .l i { color: #000; }
@@ -113,7 +114,7 @@
      E. GUITAR and SOPRANO) so names line up across groups and services. */
   .credits {
     display: grid; grid-template-columns: 3.95em minmax(0, 1fr) 3.95em minmax(0, 1fr);
-    column-gap: .5em; row-gap: .05em; margin-top: .45em; padding-top: .3em; border-top: .5pt solid #999;
+    column-gap: .5em; row-gap: .05em; margin-top: .55em;
     font-size: .8em; line-height: 1.3;
   }
   .cg-h { grid-column: 1 / -1; font-size: .78em; font-weight: 700; letter-spacing: .1em; margin: .35em 0 .1em; border-bottom: .4pt solid #bbb; }
@@ -159,8 +160,8 @@
     <h1>Order of Service</h1>
     <select id="date" aria-label="Date"></select>
     <select id="layout" aria-label="Sheet size">
-      <option value="half">2 per page (half sheet)</option>
       <option value="third">3 per page (third sheet)</option>
+      <option value="half">2 per page (half sheet)</option>
     </select>
     <span class="spacer"></span>
     <span class="status" id="status"></span>
@@ -198,7 +199,7 @@
   const DRAFT_PREFIX = 'gbc-oos-draft|';
   const LAYOUT_KEY = 'gbc-oos-layout';
   const LAYOUTS = { half: { width: 5.5, copies: 2, min: 0.7 }, third: { width: 11 / 3, copies: 3, min: 0.6 } };
-  let layout = LAYOUTS[store((s) => s.getItem(LAYOUT_KEY))] ? store((s) => s.getItem(LAYOUT_KEY)) : 'half';
+  let layout = LAYOUTS[store((s) => s.getItem(LAYOUT_KEY))] ? store((s) => s.getItem(LAYOUT_KEY)) : 'third';
   const PASTOR = 'Pastor Daniel Stevens';
 
   const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];
@@ -509,8 +510,7 @@
     const svc = part.svc;
     const music = [];
     MUSIC.forEach(([role, label]) => { const v = roleValue(svc, role); if (v) music.push([label, v]); });
-    // The song leader gets a line of their own above the accompanists.
-    const leader = (music.find(([k]) => k === 'Leader') || [])[1] || part.order.leader || '';
+    // The song leader is shown under the service name instead (leaderOf).
     const accompanists = music.filter(([k]) => k !== 'Leader');
     const singers = [];
     SINGER_ROWS.forEach((row) => {
@@ -520,10 +520,12 @@
     const media = [];
     MEDIA.forEach(([role, label]) => { const v = roleValue(svc, role); if (v) media.push([label, v]); });
     const groups = [['ACCOMPANISTS', accompanists], ['SINGERS', singers], ['MEDIA', media]].filter(([, list]) => list.length);
-    if (!groups.length && !leader) return '';
-    return '<div class="credits">' + (leader ? rows([['Leader', leader]]) : '') +
+    if (!groups.length) return '';
+    return '<div class="credits">' +
       groups.map(([h, list]) => '<div class="cg-h">' + h + '</div>' + rows(list)).join('') + '</div>';
   }
+
+  const leaderOf = (part) => roleValue(part.svc, 'Leading') || roleValue(part.svc, 'Song Leading') || part.order.leader || '';
 
   function headerRight(svc) {
     const parts = [fmt(svc.date, { month: 'long', day: 'numeric', year: 'numeric' })];
@@ -537,7 +539,9 @@
   function halfHtml() {
     const body = sheet.map((part) => {
       const svc = part.svc;
+      const leader = leaderOf(part);
       return '<section class="svc"><div class="svc-hd"><b>' + esc(SERVICE_LABEL[svc.service] || svc.service) + '</b><span>' + esc(headerRight(svc)) + '</span></div>' +
+        (leader ? '<div class="lead">Song Leader: ' + esc(leader) + '</div>' : '') +
         part.order.items.filter((it) => prints(it, svc)).map((it) => lineHtml(it, svc)).join('') +
         (part.order.credits !== false ? creditsHtml(part) : '') + '</section>';
     }).join('');
