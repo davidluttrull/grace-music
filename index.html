@@ -579,7 +579,7 @@
     list.forEach((s, i) => {
       const m = fmt(s.date, { month: 'long', year: 'numeric' });
       if (m !== month) { html += '<div class="month">' + esc(m) + '</div>'; month = m; }
-      html += serviceCard(s, me, i === 0);
+      html += serviceCard(s, me, s === services[0]);
     });
     $('#all').innerHTML = html;
   }
