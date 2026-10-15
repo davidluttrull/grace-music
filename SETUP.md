@@ -90,7 +90,7 @@ Anyone with the page's link can press "I'll be out", but only for names that are
 
 ## Order of service builder
 
-The builder makes the printed order of service from the same Sheet. Open <https://davidluttrull.github.io/grace-music/builder.html> on your computer (it's laid out for a computer screen, not a phone).
+The builder makes the printed order of service from the same Sheet. Open <https://gracetoanderson.com/musicorder> on your computer. It forwards to <https://davidluttrull.github.io/grace-music/builder.html>, and it's laid out for a computer screen, not a phone.
 
 ### Turning it on (one time)
 
