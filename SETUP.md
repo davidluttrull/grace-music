@@ -113,4 +113,12 @@ To change the code, edit **ORDER_CODE** under **Project Settings → Script Prop
 
 **Make this the default** saves a service's current order as the starting point for every new sheet of that kind (Sunday morning, Sunday evening, Wednesday, or one-time services). Verses and changed schedule values aren't carried into the default. **Start over** throws away this sheet's changes to that service and starts from the default again.
 
+### Custom sheets
+
+For a service that isn't in the Sheet, such as a date before November or a sheet you want to set up by hand, open the date list and pick **New custom Sunday…** or **New custom Wednesday…** at the bottom, under "Custom (not from the schedule)". A date box appears next to the list, set to the coming Sunday or Wednesday; change it to any date.
+
+A custom Sunday has a morning and an evening service, the same as a regular Sunday sheet. Each service starts from its default order, but nothing comes from the schedule: type the songs and verses into the items, and fill in the **Team** box at the bottom (music leader, accompanists, singers, media, and an optional service note). Items that are left blank, like an unused hymn, don't print. Prelude and Announcements / Prayer fill in from the Prelude and Song Leader boxes. Wednesdays get the Wednesday look and 6 per page.
+
+Save works the same way. Saved custom sheets, and ones you've started on this computer, are listed by date in the same section of the list. If you change a saved custom sheet's date, the copy under the old date is removed the next time you save.
+
 Don't edit the Orders tab by hand; the builder reads and writes it.

@@ -40,6 +40,7 @@
   .bar h1 { margin: 0 8px 0 0; font-size: 16px; font-weight: 600; }
   .bar #layout { min-width: 0; }
   .bar select { min-height: 36px; border-radius: 8px; border: 0; padding: 0 10px; color: var(--ink); min-width: 260px; }
+  .bar input[type=date] { min-height: 36px; border-radius: 8px; border: 0; padding: 0 10px; color: var(--ink); font: inherit; }
   .bar .spacer { flex: 1; }
   .bar .status { font-size: 13px; color: #CFE3C0; }
   .bar .status.dirty { color: #FFE7A3; }
@@ -84,6 +85,12 @@
   .add-row select { height: 32px; border-radius: 8px; border: 1px solid var(--tint-line); padding: 0 8px; background: #fff; }
   .opts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 13px; }
   .opts label { display: inline-flex; gap: 6px; align-items: center; }
+  .team { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .team h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 10px; }
+  .team label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); }
+  .team label.wide { grid-column: 1 / -1; }
+  .team input { height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--ink); }
   .opts input[type=text] { height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; width: 170px; }
 
   /* ---------- Preview ---------- */
@@ -176,6 +183,7 @@
   <div class="bar">
     <h1>Order of Service</h1>
     <select id="date" aria-label="Date"></select>
+    <input type="date" id="customDate" aria-label="Date for the custom sheet" hidden>
     <select id="layout" aria-label="Sheet size">
       <option value="third">3 per page (third sheet)</option>
       <option value="half">2 per page (half sheet)</option>
@@ -326,6 +334,80 @@
   // Linked items with nothing on the schedule (an empty Song 5) are left off the sheet.
   const prints = (item, svc) => !item.hidden && !(item.source && !shown(item, svc));
 
+  // ---------- Custom sheets (not linked to the schedule) ----------
+  // A custom Sunday has a morning and an evening service, like a regular Sunday sheet.
+  const CUSTOM_KINDS = { Sunday: ['Sunday AM', 'Sunday PM'], Wednesday: ['Wednesday'] };
+  // Each custom service's team: [schedule role, label in the editor]. The credits and linked
+  // items (Prelude, Announcements / Prayer) read these the same way they read the Sheet.
+  const TEAM = {
+    'Sunday AM': [['Leading', 'Music Leader'], ['Prelude', 'Prelude'], ['Piano', 'Piano'], ['Synth', 'Synth'], ['Strings', 'Strings'],
+      ['Guitar', 'Guitar'], ['Electric Guitar', 'Electric Guitar'], ['Bass Guitar', 'Bass Guitar'],
+      ['Soprano', 'Soprano'], ['Alto', 'Alto'], ['Tenor', 'Tenor'], ['Bass', 'Bass'], ['Alt (Women)', 'Alt (Women)'], ['Alt (Men)', 'Alt (Men)'],
+      ['Slides', 'Slides'], ['House Audio', 'House Audio'], ['Livestream Audio', 'Livestream Audio'], ['Video Mixer', 'Video Mixer']],
+    'Sunday PM': [['Leading', 'Music Leader'], ['Prelude', 'Prelude'], ['Piano', 'Piano'], ['Synth', 'Synth'],
+      ['Slides', 'Slides'], ['House Audio', 'House Audio'], ['Video Mixer', 'Video Mixer']],
+    'Wednesday': [['Song Leading', 'Song Leader'], ['Piano', 'Piano'], ['House Audio', 'House Audio'], ['Video Mixer', 'Video Mixer']],
+  };
+  // Saved as "2026-10-14|Custom Wednesday" on the Orders tab.
+  const CUSTOM_KEY = /^(\d{4}-\d{2}-\d{2})\|Custom (Sunday AM|Sunday PM|Wednesday)$/;
+  const customKey = (date, service) => date + '|Custom ' + service;
+  const kindOf = (service) => (service === 'Wednesday' ? 'Wednesday' : 'Sunday');
+  const isTeamRole = (svc, role) => (TEAM[svc.service] || []).some(([r]) => r === role);
+  let custom = null;   // { kind, date } while a custom sheet is open
+
+  function customSvc(date, service, team) {
+    return { date, service, custom: true,
+      items: Object.keys(team).filter((role) => team[role]).map((role) => ({ section: '', role, value: team[role] })) };
+  }
+
+  const dateKey = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // The coming Sunday or Wednesday (today, if it's that day).
+  function nextDay(kind) {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + (((kind === 'Wednesday' ? 3 : 0) - d.getDay() + 7) % 7));
+    return dateKey(d);
+  }
+
+  function chooseCustom(kind, date) {
+    custom = { kind, date };
+    cancelled = [];
+    $('#customDate').hidden = false;
+    $('#customDate').value = date;
+    sheet = CUSTOM_KINDS[kind].map((service) => {
+      const key = customKey(date, service);
+      const part = Object.assign({ key, custom: true }, loadOrder({ date, service, items: [] }, key));
+      part.order.team = part.order.team || {};
+      part.svc = customSvc(date, service, part.order.team);
+      return part;
+    });
+    showLayout(savedLayout());
+    renderEditor();
+    renderPreview();
+    renderStatus();
+  }
+
+  // Changing a custom sheet's date moves it; the copy saved under the old date is removed on Save.
+  $('#customDate').onchange = () => {
+    const date = $('#customDate').value;
+    if (!custom || !date || date === custom.date) return;
+    custom.date = date;
+    sheet.forEach((part) => {
+      store((s) => s.removeItem(DRAFT_PREFIX + part.key));
+      if (!part.moveFrom && saved.orders[part.key]) part.moveFrom = part.key;
+      part.key = customKey(date, part.svc.service);
+      part.svc.date = date;
+      changed(part);
+    });
+    renderDates();
+  };
+
+  function openChoice(v) {
+    const [a, b, c] = v.split('|');
+    if (a === 'new') chooseCustom(b, nextDay(b));
+    else if (a === 'custom') chooseCustom(c, b);
+    else chooseDate(v);
+  }
+
   // ---------- Building a sheet for a date ----------
   function freshOrder(svc) {
     const type = templateType(svc);
@@ -346,6 +428,8 @@
   }
 
   function chooseDate(dateKey) {
+    custom = null;
+    $('#customDate').hidden = true;
     const onDate = services.filter((s) => s.date === dateKey);
     cancelled = onDate.filter(isCancelled);
     sheet = onDate.filter((s) => !isCancelled(s)).map((svc) => {
@@ -367,8 +451,29 @@
       const done = services.some((s) => s.date === d && saved.orders[d + '|' + s.service]);
       return '<option value="' + d + '">' + esc(fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })) + ' · ' + esc(names) + (done ? '  ✓ saved' : '') + '</option>';
     }).join('');
-    const firstUpcoming = dates.find((d) => parseDate(d) >= today) || dates[0];
-    $('#date').value = dates.includes(current) ? current : firstUpcoming;
+    // Custom sheets that are saved, or started on this computer, from two weeks back on.
+    const from = new Date(today); from.setDate(from.getDate() - 14);
+    const customs = new Map();   // "date|kind" -> saved?
+    const note = (key, isSaved) => {
+      const m = CUSTOM_KEY.exec(key);
+      if (!m || parseDate(m[1]) < from) return;
+      const k = m[1] + '|' + kindOf(m[2]);
+      customs.set(k, customs.get(k) || isSaved);
+    };
+    Object.keys(saved.orders).forEach((k) => note(k, true));
+    store((s) => Object.keys(s).forEach((k) => { if (k.startsWith(DRAFT_PREFIX)) note(k.slice(DRAFT_PREFIX.length), false); }));
+    $('#date').innerHTML += '<optgroup label="Custom (not from the schedule)">' +
+      '<option value="new|Sunday">New custom Sunday…</option><option value="new|Wednesday">New custom Wednesday…</option>' +
+      [...customs].sort().map(([k, isSaved]) => {
+        const [d, kind] = k.split('|');
+        return '<option value="custom|' + esc(k) + '">' + esc(fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })) + ' · Custom ' + kind +
+          (isSaved ? '  ✓ saved' : '  (not saved)') + '</option>';
+      }).join('') + '</optgroup>';
+    const values = [...$('#date').options].map((o) => o.value);
+    const firstUpcoming = dates.find((d) => parseDate(d) >= today) || dates[0] || 'new|Sunday';
+    const open = custom && 'custom|' + custom.date + '|' + custom.kind;
+    const want = custom ? (values.includes(open) ? open : 'new|' + custom.kind) : current;
+    $('#date').value = values.includes(want) ? want : firstUpcoming;
   }
 
   // ---------- Editor ----------
@@ -381,34 +486,59 @@
     }
     $('#editor').innerHTML = sheet.map((part, p) => {
       const svc = part.svc;
-      const needsLeader = !roleValue(svc, 'Leading') && !roleValue(svc, 'Song Leading');
+      const needsLeader = !part.custom && !roleValue(svc, 'Leading') && !roleValue(svc, 'Song Leading');
       return '<section class="panel" data-p="' + p + '">' +
-        '<div class="panel-head"><h2>' + esc(SERVICE_LABEL[svc.service] || svc.service) + '</h2>' +
+        '<div class="panel-head"><h2>' + esc(SERVICE_LABEL[svc.service] || svc.service) + (part.custom ? ' (custom)' : '') + '</h2>' +
         '<button type="button" class="btn small" data-act="default">Make this the default</button>' +
         '<button type="button" class="btn small" data-act="reset">Start over</button>' +
-        '<span class="sub">Gray text comes from the schedule; type over it to change just this sheet. Drag ⠿ to reorder.</span></div>' +
+        '<span class="sub">' + (part.custom
+          ? 'Not linked to the schedule. Type in the songs, and the team at the bottom; blank lines are left off. Drag ⠿ to reorder.'
+          : 'Gray text comes from the schedule; type over it to change just this sheet. Drag ⠿ to reorder.') + '</span></div>' +
         '<div class="panel-body"><ol class="items">' + part.order.items.map((it, i) => itemRow(it, i, svc)).join('') + '</ol>' +
         '<div class="add-row"><select data-act="addType" aria-label="Item to add">' +
         Object.keys(PRESETS).map((k) => '<option>' + esc(k) + '</option>').join('') +
         '</select><button type="button" class="btn small" data-act="add">Add</button></div>' +
         '<div class="opts"><label><input type="checkbox" data-act="credits"' + (part.order.credits !== false ? ' checked' : '') + '> Show team credits</label>' +
         (needsLeader ? '<label>Music leader <input type="text" data-act="leader" value="' + esc(part.order.leader || '') + '" placeholder="Name"></label>' : '') +
-        '</div></div></section>';
+        '</div>' + (part.custom ? teamHtml(part) : '') + '</div></section>';
     }).join('');
   }
 
+  function teamHtml(part) {
+    const team = part.order.team;
+    const field = (role, label, cls, ph) => '<label' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(label) +
+      '<input type="text" data-team="' + esc(role) + '" value="' + esc(team[role] || '') + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '></label>';
+    return '<div class="team"><h3>Team</h3><div class="team-grid">' +
+      field('Service Notes', 'Service note (optional, prints next to the date)', 'wide', 'Lord’s Supper') +
+      TEAM[part.svc.service].map(([role, label]) => field(role, label)).join('') + '</div></div>';
+  }
+
+  // What a linked item shows when nothing is typed in it.
+  function placeholderFor(it, svc) {
+    if (!it.source) return it.kind === 'song' ? 'Song' : 'Name';
+    const v = roleValue(svc, it.source);
+    if (!svc.custom) return v || 'Not on the schedule (left off)';
+    if (isTeamRole(svc, it.source)) return v || 'From the team (left off if blank)';
+    return it.kind === 'song' ? 'Song (left off if blank)' : 'Left off if blank';
+  }
+  // The small tag after a linked item: "from Song 1", "from Team", or "changed".
+  function fromText(it, svc) {
+    if (!it.source || (svc.custom && !isTeamRole(svc, it.source))) return '';
+    return it.value ? 'changed' : 'from ' + (svc.custom ? 'Team' : it.source);
+  }
+  const looksLinked = (it, svc) => !!it.source && !it.value && (!svc.custom || isTeamRole(svc, it.source));
+
   function itemRow(it, i, svc) {
-    const fromSchedule = it.source ? roleValue(svc, it.source) : '';
-    const placeholder = it.source ? (fromSchedule || 'Not on the schedule (left off)') : (it.kind === 'song' ? 'Song' : 'Name');
+    const placeholder = placeholderFor(it, svc);
     return '<li class="item' + (it.hidden ? ' off' : '') + '" data-i="' + i + '">' +
       '<span class="handle" title="Drag to move" aria-hidden="true">⠿</span>' +
       '<div class="row1"><input class="label" data-f="label" value="' + esc(it.label) + '" aria-label="Item">' +
       '<input class="note" data-f="note" value="' + esc(it.note) + '" placeholder="' + (it.italic ? 'Song title (optional)' : 'Detail (optional)') + '" aria-label="Detail"></div>' +
       '<div class="tools"><button type="button" class="icon" data-act="hide" title="' + (it.hidden ? 'Show on sheet' : 'Leave off sheet') + '">' + (it.hidden ? '◌' : '●') + '</button>' +
       '<button type="button" class="icon" data-act="remove" title="Remove">✕</button></div>' +
-      '<div class="row2"><input class="value' + (it.source && !it.value ? ' linked' : '') + '" data-f="value" value="' + esc(it.value) + '" placeholder="' + esc(placeholder) + '" aria-label="' + (it.kind === 'song' ? 'Song' : 'Person') + '">' +
+      '<div class="row2"><input class="value' + (looksLinked(it, svc) ? ' linked' : '') + '" data-f="value" value="' + esc(it.value) + '" placeholder="' + esc(placeholder) + '" aria-label="' + (it.kind === 'song' ? 'Song' : 'Person') + '">' +
       (it.kind === 'song' ? '<input class="verses" data-f="verses" value="' + esc(it.verses) + '" placeholder="Verses" aria-label="Verses">' : '') +
-      (it.source ? '<span class="from">' + (it.value ? 'changed' : 'from ' + esc(it.source)) + '</span>' : '') +
+      (fromText(it, svc) ? '<span class="from">' + esc(fromText(it, svc)) + '</span>' : '') +
       '</div></li>';
   }
 
@@ -429,10 +559,17 @@
       const it = part.order.items[Number(li.dataset.i)];
       it[e.target.dataset.f] = e.target.value;
       if (e.target.dataset.f === 'value') {
-        e.target.classList.toggle('linked', !!it.source && !it.value);
+        e.target.classList.toggle('linked', looksLinked(it, part.svc));
         const from = li.querySelector('.from');
-        if (from) from.textContent = it.value ? 'changed' : 'from ' + it.source;
+        if (from) from.textContent = fromText(it, part.svc);
       }
+    } else if (e.target.dataset.team) {
+      part.order.team[e.target.dataset.team] = e.target.value;
+      part.svc = customSvc(part.svc.date, part.svc.service, part.order.team);
+      e.target.closest('.panel').querySelectorAll('.item').forEach((row) => {
+        const it = part.order.items[Number(row.dataset.i)];
+        if (it.source) row.querySelector('[data-f=value]').placeholder = placeholderFor(it, part.svc);
+      });
     } else if (e.target.dataset.act === 'leader') {
       part.order.leader = e.target.value;
     } else if (e.target.dataset.act === 'credits') {
@@ -458,7 +595,9 @@
       items.splice(closing >= 0 ? closing : items.length, 0, it);
     } else if (act === 'reset') {
       if (!confirm('Start this service over from the default order? Your changes to it on this sheet will be lost.')) return;
+      const team = part.order.team;
       part.order = freshOrder(part.svc);
+      if (part.custom) part.order.team = team;   // keep the names; only the order starts over
       store((s) => s.removeItem(DRAFT_PREFIX + part.key));
     } else if (act === 'default') {
       await saveDefault(part);
@@ -676,6 +815,11 @@
         order.items.forEach((it) => { delete it.id; });
         if (!(await send(part.key, order))) return;
         saved.orders[part.key] = order;
+        if (part.moveFrom && part.moveFrom !== part.key) {
+          await send(part.moveFrom, null);
+          delete saved.orders[part.moveFrom];
+        }
+        part.moveFrom = null;
         part.dirty = false;
         store((s) => s.removeItem(DRAFT_PREFIX + part.key));
       }
@@ -714,7 +858,7 @@
   });
 
   // ---------- Start ----------
-  $('#date').onchange = () => chooseDate($('#date').value);
+  $('#date').onchange = () => openChoice($('#date').value);
   function showLayout(v) {
     layout = v;
     $('#layout').value = v;
@@ -744,7 +888,7 @@
       return;
     }
     renderDates();
-    chooseDate($('#date').value);
+    openChoice($('#date').value);
   }
   document.fonts && document.fonts.ready.then(() => { if (sheet.length) renderPreview(); });
   start();
