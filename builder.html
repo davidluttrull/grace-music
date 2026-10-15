@@ -198,6 +198,7 @@
     <span class="spacer"></span>
     <span class="status" id="status"></span>
     <button type="button" class="btn" id="saveBtn">Save</button>
+    <button type="button" class="btn" id="pdfBtn" title="One copy at its own size, to email as an attachment">Save PDF</button>
     <button type="button" class="btn primary" id="printBtn">Print</button>
   </div>
 
@@ -816,6 +817,31 @@
     window.print();
   }
   $('#printBtn').onclick = print;
+
+  // One copy on a page its own size, for emailing. Chrome's print dialog saves it
+  // when the Destination is "Save as PDF"; the file name comes from the page title.
+  function pdfName() {
+    const svc = sheet.length ? sheet[0].svc : null;
+    if (!svc) return 'Order of Service';
+    const kind = svc.service === 'Wednesday' ? 'Wednesday' : SERVICES.includes(svc.service) ? 'Sunday' : svc.service;
+    return 'Order of Service ' + svc.date + ' ' + kind;
+  }
+  function savePdf() {
+    const L = LAYOUTS[layout];
+    const page = document.createElement('style');
+    page.textContent = '@page { size: ' + L.width + 'in ' + L.height + 'in; margin: 0; }' +
+      '@media print { #printArea { width: ' + L.width + 'in !important; height: ' + L.height + 'in !important; overflow: hidden; } }';
+    document.head.appendChild(page);
+    const title = document.title;
+    document.title = pdfName();
+    $('#printArea').innerHTML = $('#half').outerHTML.replace(' id="half"', '');
+    window.print();
+    // Chrome waits here until the dialog closes.
+    page.remove();
+    document.title = title;
+    $('#printArea').innerHTML = '';
+  }
+  $('#pdfBtn').onclick = savePdf;
   // Ctrl/Cmd+P prints the same two-up sheet.
   window.addEventListener('beforeprint', () => {
     if (!$('#printArea').innerHTML) $('#printArea').innerHTML = printCopies();
