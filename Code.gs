@@ -26,7 +26,15 @@
  * service's Service Notes cell (setNote), with the same code.
  *
  * It also adds a Music Schedule menu to the Sheet: one item puts the rotation
- * formulas back in selected cells, the other builds the next month's tab.
+ * formulas back in selected cells, another builds the next month's tab, and
+ * "Update song list" fills the Song Log from the month tabs' song rows.
+ *
+ * The Songs tab lists every congregational song with its last date (newest in
+ * the Song Log, scheduled dates included) and times sung in the last 12
+ * months; both are formulas reading the Song Log. sortSongs_ keeps the tab in
+ * four sections (Hymns by number, Modern Songs A-Z, Christmas, Removed) and
+ * runs when a Category or Removed cell changes. updateSongList runs every
+ * night once setupSongList has been run.
  */
 
 const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];  // repeat every month
@@ -45,6 +53,17 @@ const ORDER_DAYS_BACK = 14;          // saved orders sent to the builder: two we
 const MAX_ORDER_CHARS = 40000;       // one order's JSON; a busy service is well under 10,000
 const MAX_BAD_CODES = 20;            // wrong order codes allowed per 10 minutes
 const NOTES_ROLE = 'Service Notes';  // column B of the row the builder's Cancelled switch writes
+
+const SONGS_SHEET = 'Songs';
+const SONG_LOG_SHEET = 'Song Log';
+const SONG_SECTION = 'Songs';        // the month tabs' section with Song 1-5 and Closing
+// Songs tab columns: # | Song | Last Sung | 12 mo | Category | Notes | Removed | Other names | ID.
+// Last Sung and 12 mo are array formulas in row 1, so the script never writes C or D.
+const SONG_COLS = 9;
+const SONG_HEADINGS = ['Hymns', 'Modern Songs', 'Christmas', 'Removed'];
+const NEW_SONGS_LABEL = 'Add new songs below this line';
+const NEW_SONG_ROWS = 5;
+const CANCELLED_NOTE = /cancel|^\s*no\b.*\bservice/i;
 
 /** GET: upcoming services, oldest first. With ?orders=1, the saved orders of service instead. */
 function doGet(e) {
@@ -477,7 +496,20 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('Music Schedule')
     .addItem('Reset selected cells to rotation', 'resetSelectionToRotation')
     .addItem('Add next month', 'addNextMonth')
+    .addSeparator()
+    .addItem('Update song list', 'updateSongList')
     .addToUi();
+}
+
+/** Re-sorts the Songs tab when a song's Category or Removed box changes. */
+function onEdit(e) {
+  const r = e && e.range;
+  if (!r || r.getSheet().getName() !== SONGS_SHEET || r.getLastRow() < 2) return;
+  const touches = (col) => r.getColumn() <= col && r.getLastColumn() >= col;
+  if (!touches(5) && !touches(7)) return;
+  // Wait until a new song has a number or title before moving it.
+  const ab = r.getSheet().getRange(r.getRow(), 1, r.getNumRows(), 2).getValues();
+  if (ab.some((row) => String(row[0]).trim() || String(row[1]).trim())) sortSongs_();
 }
 
 /**
@@ -630,4 +662,187 @@ function rotationFormulas_(ss, first) {
 
 function toast_(msg) {
   SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'Music Schedule', 6);
+}
+
+// ---------- Songs and the Song Log ----------
+
+/** Run once from the editor: updates the song list now and every night around 2 AM. */
+function setupSongList() {
+  ScriptApp.getProjectTriggers()
+    .filter((t) => t.getHandlerFunction() === 'updateSongList')
+    .forEach((t) => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('updateSongList').timeBased().everyDays(1).atHour(2).create();
+  updateSongList();
+}
+
+/** Menu item and nightly trigger. */
+function updateSongList() {
+  const res = syncSongLog_();
+  const msg = 'Song list updated: ' + res.logged + ' songs from the schedule' +
+    (res.unmatched ? ', ' + res.unmatched + ' not matched (highlighted on the Song Log)' : '') + '.';
+  try { toast_(msg); } catch (err) { console.log(msg); }   // no toast from the nightly trigger
+}
+
+/**
+ * Rewrites the Song Log's schedule rows from every month tab, keeping imported
+ * and hand-typed rows. Schedule rows from months that no longer have a tab are
+ * kept too, so deleting an old month doesn't erase its history.
+ */
+function syncSongLog_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const log = ss.getSheetByName(SONG_LOG_SHEET);
+  if (!log || !ss.getSheetByName(SONGS_SHEET)) throw new Error('The Songs and Song Log tabs are missing.');
+  sortSongs_();   // gives new songs their IDs first
+  const match = songMatcher_(readSongs_(ss.getSheetByName(SONGS_SHEET)));
+  const tz = Session.getScriptTimeZone();
+
+  const fresh = [];
+  const months = {};
+  monthSheets_(ss).forEach((sheet) => readMonth_(sheet, tz).forEach((svc) => {
+    months[svc.date.slice(0, 7)] = true;
+    const note = (svc.items.find((it) => it.role === NOTES_ROLE) || {}).value || '';
+    if (CANCELLED_NOTE.test(note)) return;
+    svc.items.forEach((it) => {
+      if (it.section !== SONG_SECTION) return;
+      fresh.push([dateFromKey_(svc.date), match(it.value), 'Schedule', SERVICE_LABEL[svc.service] || svc.service, it.role, it.value]);
+    });
+  }));
+
+  const dayKey = (d, id) => Utilities.formatDate(d, tz, 'yyyy-MM-dd') + '|' + id;
+  const taken = {};
+  fresh.forEach((r) => { if (r[1]) taken[dayKey(r[0], r[1])] = true; });
+  const last = log.getLastRow();
+  const old = last > 1 ? log.getRange(2, 1, last - 1, 6).getValues() : [];
+  const kept = old.filter((r) => r[0] instanceof Date &&
+      !(r[2] === 'Schedule' && months[Utilities.formatDate(r[0], tz, 'yyyy-MM')]) &&
+      !(r[1] && taken[dayKey(r[0], r[1])]))
+    .map((r) => { if (!r[1] && r[5]) r[1] = match(r[5]); return r; });
+
+  const rows = fresh.concat(kept).sort((a, b) => b[0] - a[0]);
+  if (last > 1) log.getRange(2, 1, last - 1, 6).clearContent();
+  if (rows.length) {
+    log.getRange(2, 1, rows.length, 6).setValues(rows);
+    log.getRange(2, 1, rows.length, 1).setNumberFormat('m/d/yyyy');
+  }
+  return { logged: fresh.length, unmatched: rows.filter((r) => !r[1] && r[5]).length };
+}
+
+function dateFromKey_(key) {
+  const p = key.split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+
+/** Song rows on the Songs tab: anything typed in a row that isn't a heading, so a half-entered song is never lost. */
+function readSongs_(sheet) {
+  const last = sheet.getLastRow();
+  if (last < 2) return [];
+  const headings = SONG_HEADINGS.concat([NEW_SONGS_LABEL]);
+  return sheet.getRange(2, 1, last - 1, SONG_COLS).getValues()
+    .filter((r) => {
+      const a = String(r[0]).trim(), b = String(r[1]).trim();
+      const typed = a || b || [4, 5, 7].some((c) => String(r[c]).trim());
+      return typed && !(headings.indexOf(a) >= 0 && !b);
+    })
+    .map((r) => ({ num: String(r[0]).trim(), title: String(r[1]).trim(), cat: String(r[4]).trim(),
+      notes: String(r[5]).trim(), removed: r[6] === true, other: String(r[7]).trim(), id: String(r[8]).trim() }));
+}
+
+/** Hymns get "#327"; other songs get the next "M###". An ID never changes, so renaming a song keeps its history. */
+function assignSongIds_(songs) {
+  let top = 0;
+  songs.forEach((s) => { const m = /^M(\d+)$/.exec(s.id); if (m) top = Math.max(top, Number(m[1])); });
+  songs.forEach((s) => {
+    if (s.id) return;
+    s.id = s.num ? '#' + s.num : 'M' + String(++top).padStart(3, '0');
+  });
+}
+
+function songSection_(s) {
+  if (s.removed) return 3;
+  if (s.cat.toLowerCase() === 'christmas') return 2;
+  return s.num ? 0 : 1;
+}
+
+function compareSongs_(a, b) {
+  if (!!a.num !== !!b.num) return a.num ? -1 : 1;
+  if (a.num) {
+    const d = (parseInt(a.num, 10) || 99999) - (parseInt(b.num, 10) || 99999);
+    return d || (a.num < b.num ? -1 : a.num > b.num ? 1 : 0);
+  }
+  const x = a.title.toLowerCase(), y = b.title.toLowerCase();
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/** Rewrites the Songs tab in its four sections, with a few blank rows at the bottom for new songs. */
+function sortSongs_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SONGS_SHEET);
+  if (!sheet) return;
+  const songs = readSongs_(sheet);
+  assignSongIds_(songs);
+  const groups = [[], [], [], []];
+  songs.forEach((s) => groups[songSection_(s)].push(s));
+
+  const left = [], right = [], kinds = [];
+  const put = (kind, l, r) => { kinds.push(kind); left.push(l); right.push(r); };
+  groups.forEach((g, i) => {
+    if (i) put('blank', ['', ''], ['', '', '', '', '']);
+    put('heading', [SONG_HEADINGS[i], ''], ['', '', '', '', '']);
+    g.sort(compareSongs_).forEach((s) => put('song', [s.num, s.title], [s.cat, s.notes, s.removed, s.other, s.id]));
+  });
+  put('blank', ['', ''], ['', '', '', '', '']);
+  put('new', [NEW_SONGS_LABEL, ''], ['', '', '', '', '']);
+  for (let i = 0; i < NEW_SONG_ROWS; i++) put('newrow', ['', ''], ['', '', false, '', '']);
+
+  const n = left.length;
+  const old = Math.max(sheet.getLastRow() - 1, 0);
+  if (old > n) {
+    sheet.getRange(n + 2, 1, old - n, 2).clearContent();
+    sheet.getRange(n + 2, 5, old - n, SONG_COLS - 4).clearContent().clearDataValidations();
+    sheet.getRange(n + 2, 1, old - n, SONG_COLS).setFontWeight('normal').setFontStyle('normal').setBackground(null);
+  }
+  sheet.getRange(2, 1, n, 2).setValues(left);
+  sheet.getRange(2, 5, n, SONG_COLS - 4).setValues(right);
+
+  const box = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+  sheet.getRange(2, 7, n, 1).setDataValidations(kinds.map((k) => [k === 'song' || k === 'newrow' ? box : null]));
+  sheet.getRange(2, 1, n, SONG_COLS)
+    .setFontWeights(kinds.map((k) => Array(SONG_COLS).fill(k === 'heading' ? 'bold' : 'normal')))
+    .setFontStyles(kinds.map((k) => Array(SONG_COLS).fill(k === 'new' ? 'italic' : 'normal')))
+    .setBackgrounds(kinds.map((k) => Array(SONG_COLS).fill(k === 'heading' ? '#d9e2ec' : k === 'new' ? '#f3f3f3' : null)));
+  sheet.getRange(2, 3, n, 1).setNumberFormat('m/d/yy');
+}
+
+/**
+ * Turns what's typed in a song cell ("327 He Lives", "*New* I Set My Hope on
+ * Jesus", "Hail the Day") into a song ID, or '' if it can't tell. With a
+ * number, a hymn whose title matches wins (so a mistyped number still finds
+ * the right hymn), then the number. Without one, modern songs are checked
+ * before hymns. Each check is tried as typed, then ignoring anything in
+ * parentheses. Two songs with the same name match neither.
+ */
+function songMatcher_(songs) {
+  const norm = (t) => String(t).toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+  const bare = (t) => norm(String(t).replace(/\([^)]*\)/g, ' '));
+  const byNum = {}, modern = {}, hymn = {}, modernBare = {}, hymnBare = {};
+  const add = (map, key, id) => { if (key) map[key] = (key in map && map[key] !== id) ? null : id; };
+  songs.forEach((s) => {
+    if (!s.id) return;
+    if (s.num) byNum[s.num.replace(/\s+/g, '')] = s.id;
+    const names = [s.title].concat(s.other ? s.other.split(/\s*;\s*/) : []).filter(Boolean);
+    names.forEach((t) => {
+      add(s.num ? hymn : modern, norm(t), s.id);
+      add(s.num ? hymnBare : modernBare, bare(t), s.id);
+    });
+  });
+  return (value) => {
+    let t = String(value || '').trim().replace(/^\*\s*new\s*\*\s*/i, '');
+    if (/^\d{1,4}$/.test(t)) return byNum[t] || '';
+    const m = /^(\d{1,4}(?:\s*-\s*\d{1,4})?)\.?\s+(.+)$/.exec(t);
+    if (m) {
+      const k = norm(m[2]), b = bare(m[2]);
+      return hymn[k] || hymnBare[b] || byNum[m[1].replace(/\s+/g, '')] || modern[k] || modernBare[b] || '';
+    }
+    const k = norm(t), b = bare(t);
+    return modern[k] || hymn[k] || modernBare[b] || hymnBare[b] || '';
+  };
 }

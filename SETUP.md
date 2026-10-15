@@ -88,6 +88,35 @@ Emails go to the account that owns the script. To send them somewhere else, open
 
 Anyone with the page's link can press "I'll be out", but only for names that are on that service, and every report emails you. If someone misuses it, delete their rows on the Away tab.
 
+## Song list
+
+The **Songs** tab lists every congregational song, and the **Song Log** tab behind it records each time one was sung. They replace the dates on the old Grace Song Schedule sheet, which is still there, unchanged.
+
+### Turning it on (one time)
+
+1. Paste the new `Code.gs` into Apps Script and save.
+2. In the function dropdown, pick **setupSongList** and click **Run**. Google asks for permission again, this time to run on a schedule. Allow it. This updates the song list now and every night around 2 AM.
+
+You don't need a new deployment for this; the volunteer page doesn't use these tabs.
+
+### The Songs tab
+
+- **#** and **Song**, then **Last Sung**: the song's most recent date in the log, including dates already on the schedule. It uses the old sheet's colors: dark navy for over a year ago, blue for 200 days, green for 90, yellow for 45, light red for the last 45 days, and white for today or later (already scheduled).
+- **12 mo**: how many times it was sung in the last 12 months. The more often, the darker green.
+- **Category**, **Notes** (including when a song was introduced), and **Removed**.
+- **Other names**: other ways a title gets typed on the schedule, separated by semicolons ("Amazing Grace (Chains Are Gone)"). Only needed when a song doesn't match on its own.
+- The songs are in four sections: **Hymns** by number, **Modern Songs** A–Z, **Christmas**, and **Removed**. Checking **Removed**, or changing a song's **Category** to or from Christmas, moves it to the right section right away. Put the reason in Notes.
+- To add a song, type it in the rows under **Add new songs below this line** (the number if it has one, the title, and a category). It moves into place the next time the list updates.
+- Don't type in Last Sung or 12 mo; they're formulas.
+
+### How songs get logged
+
+Every night, and whenever you click **Music Schedule → Update song list**, the script reads the Songs rows (Song 1–5 and Closing) from every month tab and rewrites the Song Log's schedule rows. Changing a song in the schedule fixes the log the next time it runs. Cancelled services are skipped. Deleting an old month tab doesn't erase its songs from the log.
+
+It matches by hymn number, but a hymn whose title matches wins, so "475 I'd Rather Have Jesus" still finds 474. Songs without a number are matched by title, modern songs first. Anything it can't match is highlighted yellow on the Song Log: either add the way it was typed to the song's **Other names**, or add the song if it's new. Entries that aren't songs, like "Congregational Favorites", just stay highlighted.
+
+The history from the old sheet is on the Song Log with the source "Imported". You can add a missed date by hand: type the date in A and the song as you'd write it in **As written** (F), and the next update matches it.
+
 ## Order of service builder
 
 The builder makes the printed order of service from the same Sheet. Open <https://gracetoanderson.com/musicorder> on your computer. It forwards to <https://davidluttrull.github.io/grace-music/builder.html>, and it's laid out for a computer screen, not a phone.
