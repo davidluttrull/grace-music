@@ -91,6 +91,11 @@
   .team label { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); }
   .team label.wide { grid-column: 1 / -1; }
   .team input { height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; font: inherit; font-size: 13px; color: var(--ink); }
+  .cancel-toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 500; }
+  .panel.is-off .panel-head { background: #FCE4E4; }
+  .reason { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); max-width: 420px; }
+  .reason input { height: 32px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; font: inherit; font-size: 14px; color: var(--ink); }
+  .hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
   .opts input[type=text] { height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; width: 170px; }
 
   /* ---------- Preview ---------- */
@@ -108,6 +113,7 @@
   .svc-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1.5pt solid #000; padding-bottom: .15em; margin-bottom: .35em; }
   .svc-hd b { font-size: 1.45em; font-weight: 700; letter-spacing: .005em; }
   .svc-hd span { font-size: .9em; font-weight: 600; color: #333; text-align: right; }
+  .off-note { font-style: italic; }
   .lead { font-weight: 700; font-size: .8em; margin: -.05em 0 .35em; }  /* same size as the team credits */
   .ln { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: .07em 0; }
   .ln .l { color: #333; }
@@ -239,6 +245,9 @@
   const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];
   const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
   const CANCELLED = /cancel|^\s*no\b.*\bservice/i;
+  // Services the builder can cancel. Save writes "No Service – reason" to the Sheet's Service Notes row.
+  const CANCELLABLE = ['Sunday PM'];
+  const CANCEL_PREFIX = /^\s*(cancel+ed|no\b.*?\bservice)\s*(?:[–—:-]\s*)?/i;
 
   // ---------- Default orders (until you save your own with "Make this the default") ----------
   const text = (label, more) => Object.assign({ kind: 'text', label, note: '', value: '', verses: '', source: '', hidden: false, italic: false }, more);
@@ -320,6 +329,38 @@
   const serviceNote = (svc) => roleValue(svc, 'Service Notes');
   const templateType = (svc) => (SERVICES.includes(svc.service) ? svc.service : 'One-time');
   const isCancelled = (svc) => CANCELLED.test(serviceNote(svc));
+
+  // The Service Notes text a sheet uses: a custom sheet's own, a change waiting for Save, or the Sheet's.
+  function noteOf(part) {
+    if (part.custom) return part.order.team['Service Notes'] || '';
+    return part.order.pendingNote !== undefined ? part.order.pendingNote : serviceNote(part.svc);
+  }
+  const partOff = (part) => CANCELLED.test(noteOf(part));
+  // "No Service – Thanksgiving Dinner" -> "Thanksgiving Dinner"
+  function cancelReason(note) {
+    const m = CANCEL_PREFIX.exec(note || '');
+    return m ? note.slice(m[0].length) : (note || '');
+  }
+  // Keeps the note's own wording ("Cancelled", "No Regular Evening Service") when there is one.
+  function cancelNote(reason, oldNote) {
+    const m = CANCEL_PREFIX.exec(oldNote || '');
+    const prefix = m ? m[1] : 'No Service';
+    return reason.trim() ? prefix + ' – ' + reason.trim() : prefix;
+  }
+  function setNote(part, note) {
+    if (part.custom) {
+      part.order.team['Service Notes'] = note;
+      part.svc = customSvc(part.svc.date, part.svc.service, part.order.team);
+    } else if (note === serviceNote(part.svc)) delete part.order.pendingNote;
+    else part.order.pendingNote = note;
+  }
+  // After Save, so the sheet matches the Sheet without reloading.
+  function setSheetNote(svc, note) {
+    const it = svc.items.find((x) => x.role === 'Service Notes');
+    if (it && note) it.value = note;
+    else if (it) svc.items.splice(svc.items.indexOf(it), 1);
+    else if (note) svc.items.unshift({ section: '', role: 'Service Notes', value: note });
+  }
 
   // "43 Rejoice the Lord Is King", "*New* I Set My Hope on Jesus"
   function parseSong(textValue) {
@@ -431,8 +472,8 @@
     custom = null;
     $('#customDate').hidden = true;
     const onDate = services.filter((s) => s.date === dateKey);
-    cancelled = onDate.filter(isCancelled);
-    sheet = onDate.filter((s) => !isCancelled(s)).map((svc) => {
+    cancelled = onDate.filter((s) => isCancelled(s) && !CANCELLABLE.includes(s.service));
+    sheet = onDate.filter((s) => !cancelled.includes(s)).map((svc) => {
       const key = svc.date + '|' + svc.service;
       return Object.assign({ svc, key }, loadOrder(svc, key));
     });
@@ -487,8 +528,19 @@
     $('#editor').innerHTML = sheet.map((part, p) => {
       const svc = part.svc;
       const needsLeader = !part.custom && !roleValue(svc, 'Leading') && !roleValue(svc, 'Song Leading');
+      const canCancel = CANCELLABLE.includes(svc.service);
+      const off = canCancel && partOff(part);
+      const toggle = canCancel ? '<label class="cancel-toggle"><input type="checkbox" data-act="cancel"' + (off ? ' checked' : '') + '> Cancelled</label>' : '';
+      if (off) {
+        return '<section class="panel is-off" data-p="' + p + '">' +
+          '<div class="panel-head"><h2>' + esc(SERVICE_LABEL[svc.service] || svc.service) + (part.custom ? ' (custom)' : '') + '</h2>' + toggle +
+          '<span class="sub">This service is cancelled. Uncheck Cancelled to bring it back; its order is kept.</span></div>' +
+          '<div class="panel-body"><label class="reason">Reason (optional)<input type="text" data-act="reason" value="' + esc(cancelReason(noteOf(part))) + '" placeholder="Thanksgiving Dinner"></label>' +
+          '<p class="hint">The sheet shows “<span class="cancel-note">' + esc(noteOf(part)) + '</span>” in place of this service. ' +
+          (part.custom ? '' : 'It’s the Service Notes row in the Sheet; Save writes your changes there.') + '</p></div></section>';
+      }
       return '<section class="panel" data-p="' + p + '">' +
-        '<div class="panel-head"><h2>' + esc(SERVICE_LABEL[svc.service] || svc.service) + (part.custom ? ' (custom)' : '') + '</h2>' +
+        '<div class="panel-head"><h2>' + esc(SERVICE_LABEL[svc.service] || svc.service) + (part.custom ? ' (custom)' : '') + '</h2>' + toggle +
         '<button type="button" class="btn small" data-act="default">Make this the default</button>' +
         '<button type="button" class="btn small" data-act="reset">Start over</button>' +
         '<span class="sub">' + (part.custom
@@ -563,6 +615,12 @@
         const from = li.querySelector('.from');
         if (from) from.textContent = fromText(it, part.svc);
       }
+    } else if (e.target.dataset.act === 'cancel') {
+      setNote(part, e.target.checked ? cancelNote('', noteOf(part)) : '');
+      renderEditor();
+    } else if (e.target.dataset.act === 'reason') {
+      setNote(part, cancelNote(e.target.value, noteOf(part)));
+      e.target.closest('.panel').querySelector('.cancel-note').textContent = noteOf(part);
     } else if (e.target.dataset.team) {
       part.order.team[e.target.dataset.team] = e.target.value;
       part.svc = customSvc(part.svc.date, part.svc.service, part.order.team);
@@ -692,11 +750,12 @@
 
   const leaderOf = (part) => roleValue(part.svc, 'Leading') || roleValue(part.svc, 'Song Leading') || part.order.leader || '';
 
-  function headerRight(svc) {
+  function headerRight(part) {
+    const svc = part.svc;
     const parts = [fmt(svc.date, { month: 'long', day: 'numeric', year: 'numeric' })];
     const time = roleValue(svc, 'Time');
     if (time) parts.push(time);
-    const note = serviceNote(svc);
+    const note = noteOf(part);
     if (note) parts.push(note);
     return parts.join(' · ');
   }
@@ -705,7 +764,12 @@
     const body = sheet.map((part) => {
       const svc = part.svc;
       const leader = leaderOf(part);
-      return '<section class="svc"><div class="svc-hd"><b>' + esc(SERVICE_LABEL[svc.service] || svc.service) + '</b><span>' + esc(headerRight(svc)) + '</span></div>' +
+      if (CANCELLABLE.includes(svc.service) && partOff(part)) {
+        return '<section class="svc"><div class="svc-hd"><b>' + esc(SERVICE_LABEL[svc.service] || svc.service) + '</b><span>' +
+          esc(fmt(svc.date, { month: 'long', day: 'numeric', year: 'numeric' })) + '</span></div>' +
+          '<div class="ln off-note"><span class="l">' + esc(noteOf(part)) + '</span></div></section>';
+      }
+      return '<section class="svc"><div class="svc-hd"><b>' + esc(SERVICE_LABEL[svc.service] || svc.service) + '</b><span>' + esc(headerRight(part)) + '</span></div>' +
         (leader ? '<div class="lead">Music Leader: ' + esc(leader) + '</div>' : '') +
         part.order.items.filter((it) => prints(it, svc)).map((it) => lineHtml(it, svc)).join('') +
         (part.order.credits !== false ? creditsHtml(part) : '') + '</section>';
@@ -791,18 +855,20 @@
   }
 
   // Sends one save, asking for the code first if needed and again if it's wrong.
-  async function send(key, order) {
+  // Sends one request that needs the code, asking for it first if needed and again if it's wrong.
+  async function withCode(action, fields) {
     let code = store((s) => s.getItem(CODE_KEY));
     let message = '';
     for (;;) {
       if (!code) code = await askCode(message);
-      if (!code) return false;
-      const res = await post({ action: 'saveOrder', code, key, order });
+      if (!code) return null;
+      const res = await post(Object.assign({ action, code }, fields));
       if (res.status === 'badcode') { store((s) => s.removeItem(CODE_KEY)); code = null; message = 'That code isn’t right. Try again.'; continue; }
       store((s) => s.setItem(CODE_KEY, code));
-      return true;
+      return res;
     }
   }
+  const send = async (key, order) => !!(await withCode('saveOrder', { key, order }));
 
   async function save() {
     const btn = $('#saveBtn');
@@ -810,6 +876,13 @@
     btn.textContent = 'Saving…';
     try {
       for (const part of sheet) {
+        // A Cancelled change goes to the Service Notes row first.
+        if (!part.custom && part.order.pendingNote !== undefined) {
+          const res = await withCode('setNote', { date: part.svc.date, service: part.svc.service, note: part.order.pendingNote });
+          if (!res) return;
+          setSheetNote(part.svc, res.note);
+          delete part.order.pendingNote;
+        }
         const order = clone(part.order);
         order.savedAt = Date.now();
         order.items.forEach((it) => { delete it.id; });

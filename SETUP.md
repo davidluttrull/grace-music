@@ -111,6 +111,8 @@ To change the code, edit **ORDER_CODE** under **Project Settings → Script Prop
 7. **Save** stores the sheet on the **Orders** tab, so you can finish it later or on another computer. Until you save, changes are kept on the computer you're using.
 8. **Print** prints two, three, or six copies on one landscape letter page; cut them apart. Use Chrome, leave Scale at 100%, and turn off Headers and footers. To keep a PDF for your Drive folder, choose **Save as PDF** as the printer.
 
+**Cancelling Sunday evening:** check **Cancelled** at the top of the Sunday Evening section and type a reason if you have one ("Thanksgiving Dinner"). The sheet prints "No Service – Thanksgiving Dinner" under Sunday Evening in place of the service. **Save** writes the same text to Sunday PM's Service Notes row in the Sheet, so the Sheet and the volunteer page show the service as cancelled too. It works the other way as well: a Sunday PM note you type in the Sheet that starts with "No Service" or "Cancelled" shows up checked in the builder, with the rest of the note as the reason. Uncheck Cancelled and Save to clear the note and bring the service back; its order is kept.
+
 **Make this the default** saves a service's current order as the starting point for every new sheet of that kind (Sunday morning, Sunday evening, Wednesday, or one-time services). Verses and changed schedule values aren't carried into the default. **Start over** throws away this sheet's changes to that service and starts from the default again.
 
 ### Custom sheets

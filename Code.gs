@@ -22,7 +22,8 @@
  * doGet?orders=1 and saves them with doPost. Saving needs the ORDER_CODE
  * script property, which setupOrderCode creates. Orders live on the Orders
  * tab, one row per service ("2026-11-01|Sunday AM") or default
- * ("template|Sunday AM"), as JSON.
+ * ("template|Sunday AM"), as JSON. The builder's Cancelled switch writes a
+ * service's Service Notes cell (setNote), with the same code.
  *
  * It also adds a Music Schedule menu to the Sheet: one item puts the rotation
  * formulas back in selected cells, the other builds the next month's tab.
@@ -43,6 +44,7 @@ const ORDERS_SHEET = 'Orders';
 const ORDER_DAYS_BACK = 14;          // saved orders sent to the builder: two weeks back and everything ahead
 const MAX_ORDER_CHARS = 40000;       // one order's JSON; a busy service is well under 10,000
 const MAX_BAD_CODES = 20;            // wrong order codes allowed per 10 minutes
+const NOTES_ROLE = 'Service Notes';  // column B of the row the builder's Cancelled switch writes
 
 /** GET: upcoming services, oldest first. With ?orders=1, the saved orders of service instead. */
 function doGet(e) {
@@ -167,6 +169,7 @@ function doPost(e) {
   }
   try {
     if (body && body.action === 'saveOrder') return json_(saveOrder_(body));
+    if (body && body.action === 'setNote') return json_(setServiceNote_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -385,6 +388,64 @@ function saveOrder_(body) {
     lock.releaseLock();
   }
   return { status: 'ok', saved: new Date().toISOString() };
+}
+
+/**
+ * POST {action: 'setNote', code, date, service, note}: writes one service's
+ * Service Notes cell, such as "No Service – Thanksgiving Dinner". A blank note
+ * clears it. The Sheet's cancelled colors follow the note on their own.
+ */
+function setServiceNote_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const date = String(body.date || '');
+  const service = String(body.service || '');
+  let note = String(body.note == null ? '' : body.note).replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (/^[=+\-@]/.test(note)) note = "'" + note;   // never a formula
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || SERVICES.indexOf(service) < 0) {
+    throw new Error('That service can’t be changed. Reload the page and try again.');
+  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const cell = serviceCell_(date, service, NOTES_ROLE);
+    if (!cell) throw new Error('There’s no Service Notes row for ' + SERVICE_LABEL[service] + ' on ' + date + ' in the Sheet.');
+    cell.setValue(note);
+  } finally {
+    lock.releaseLock();
+  }
+  return { status: 'ok', note: note };
+}
+
+/** The cell for one role of one service on one date, or null if the Sheet doesn't have it. */
+function serviceCell_(date, service, role) {
+  const tz = Session.getScriptTimeZone();
+  const width = FIRST_DATE_COL - 1 + DATE_COLS;
+  const sheets = monthSheets_(SpreadsheetApp.getActiveSpreadsheet());
+  for (let i = 0; i < sheets.length; i++) {
+    const sheet = sheets[i];
+    const last = sheet.getLastRow();
+    if (last < 2) continue;
+    const range = sheet.getRange(1, 1, last, width);
+    const values = range.getValues();
+    const shown = range.getDisplayValues();
+    for (let r = 0; r < values.length; r++) {
+      if (!isHeader_(shown[r], values[r]) || String(shown[r][0]).trim() !== service) continue;
+      let col = -1;
+      for (let c = FIRST_DATE_COL - 1; c < width; c++) {
+        const v = values[r][c];
+        if (v instanceof Date && Utilities.formatDate(v, tz, 'yyyy-MM-dd') === date) col = c;
+      }
+      if (col < 0) continue;
+      for (let k = r + 1; k < values.length; k++) {
+        const a = String(shown[k][0]).trim();
+        const b = String(shown[k][1]).trim();
+        if ((!a && !b) || isHeader_(shown[k], values[k])) break;
+        if (b === role) return sheet.getRange(k + 1, col + 1);
+      }
+    }
+  }
+  return null;
 }
 
 /** null if the code is right, otherwise the reply to send back. */
