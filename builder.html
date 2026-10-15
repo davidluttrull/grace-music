@@ -812,11 +812,12 @@
   window.addEventListener('resize', scalePreview);
 
   const printCopies = () => $('#half').outerHTML.replace(' id="half"', '').repeat(LAYOUTS[layout].copies);
-  function print() {
+  // Not named print(): a page-level print() replaces window.print and calls itself forever.
+  function printSheet() {
     $('#printArea').innerHTML = printCopies();
     window.print();
   }
-  $('#printBtn').onclick = print;
+  $('#printBtn').onclick = printSheet;
 
   // One copy on a page its own size, for emailing. Chrome's print dialog saves it
   // when the Destination is "Save as PDF"; the file name comes from the page title.
@@ -835,11 +836,8 @@
     const title = document.title;
     document.title = pdfName();
     $('#printArea').innerHTML = $('#half').outerHTML.replace(' id="half"', '');
+    window.addEventListener('afterprint', () => { page.remove(); document.title = title; }, { once: true });
     window.print();
-    // Chrome waits here until the dialog closes.
-    page.remove();
-    document.title = title;
-    $('#printArea').innerHTML = '';
   }
   $('#pdfBtn').onclick = savePdf;
   // Ctrl/Cmd+P prints the same two-up sheet.
