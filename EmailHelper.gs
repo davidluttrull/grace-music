@@ -112,7 +112,7 @@ function doGet(e) {
     const sunday = /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? p.date : comingSunday_();
     const res = makeDrafts_(sunday, true);
     return page('Drafts ready', '<p>' + esc_(summary_(res)).replace(/\n/g, '<br>') + '</p>' +
-      '<p><a href="https://mail.google.com/mail/u/0/#drafts" style="font-weight:600">Open Gmail drafts</a></p>');
+      '<p><a href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noopener" style="font-weight:600">Open Gmail drafts</a> (opens in a new tab)</p>');
   } catch (err) {
     return page("Couldn't make the drafts", '<p>' + esc_(err.message) + '</p>');
   }
