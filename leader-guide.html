@@ -76,20 +76,17 @@
   @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .steps { display: none; } }
 
   .steps { list-style: none; margin: 0; padding: 0; position: sticky; top: 12px; }
-  .steps button { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 7px 8px; border-radius: 9px; font: 500 13.5px/1.3 Poppins, system-ui, sans-serif; color: var(--muted); cursor: pointer; }
-  .steps button:hover { background: var(--tint); color: var(--ink); }
-  .steps .n { flex: 0 0 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--tint-line); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
-  .steps button.done .n { background: var(--tint); border-color: var(--brand); color: var(--brand-mid); }
-  .steps button.current { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
-  .steps button.current .n { background: var(--brand); border-color: var(--brand); color: #10160C; }
+  .steps a { display: flex; gap: 10px; align-items: center; padding: 7px 8px; border-radius: 9px; font: 500 13.5px/1.3 Poppins, system-ui, sans-serif; color: var(--muted); text-decoration: none; }
+  .steps a:hover { background: var(--tint); color: var(--ink); }
+  .steps .n, .num { flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--tint-line); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+  .steps a.current { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+  .steps a.current .n { background: var(--brand); border-color: var(--brand); color: #10160C; }
 
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px 18px; }
-  @media (max-width: 560px) { .card { padding: 18px 16px 14px; } }
-  .progress { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
-  .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--tint); overflow: hidden; }
-  .bar span { display: block; height: 100%; background: var(--brand); transition: width .2s; }
-  .step h2 { margin: 0 0 4px; font-size: 21px; color: var(--brand-mid); }
-  .when { display: inline-block; margin: 0 0 14px; padding: 2px 10px; border-radius: 999px; background: var(--tint); color: var(--muted); font-size: 12.5px; font-weight: 500; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 24px 8px; margin: 0 0 16px; scroll-margin-top: 14px; }
+  @media (max-width: 560px) { .step { padding: 16px 16px 6px; } }
+  .step h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 20px; color: var(--brand-mid); }
+  .num { flex-basis: 30px; width: 30px; height: 30px; font-size: 14px; background: var(--brand); border-color: var(--brand); color: #10160C; }
+  .when { display: table; margin: 0 0 14px; padding: 2px 10px; border-radius: 999px; background: var(--tint); color: var(--muted); font-size: 12.5px; font-weight: 500; }
   .step p { margin: 0 0 12px; }
   .step ul, .step ol { margin: 0 0 14px; padding-left: 22px; }
   .step li { margin: 5px 0; }
@@ -101,28 +98,23 @@
   code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; background: var(--code-bg); border-radius: 5px; padding: 1px 5px; overflow-wrap: anywhere; }
   .swatches { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0 0 14px; font-size: 14px; align-items: center; }
   .sw { width: 42px; height: 18px; border-radius: 4px; border: 1px solid var(--line); }
-
-  .nav { display: flex; gap: 10px; justify-content: space-between; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-  .nav button { min-height: 40px; padding: 0 18px; border-radius: 9px; border: 1px solid var(--tint-line); background: var(--card); color: var(--ink); font: 600 14px Poppins, system-ui, sans-serif; cursor: pointer; }
-  .nav button.next { background: var(--brand); border-color: var(--brand); color: #10160C; }
-  .nav button:disabled { opacity: .45; cursor: default; }
+  .top-link { display: block; text-align: right; font-size: 12.5px; margin: -4px 0 10px; }
   footer { color: var(--muted); font-size: 13px; padding: 0 0 40px; }
 
   @media print {
     body { background: #fff; color: #000; font-size: 11pt; }
     header.top { background: #fff; color: #000; padding: 0 0 8pt; border-bottom: 2pt solid #000; }
     header.top p { color: #333; }
-    .tabs, .steps, .progress, .nav, footer { display: none !important; }
+    .tabs, .steps, .top-link, footer { display: none !important; }
     .layout { display: block; padding: 0; }
-    .card { border: 0; padding: 0; }
-    .step[hidden] { display: block !important; }
-    .step { break-inside: avoid; margin-bottom: 14pt; }
+    .step { border: 0; padding: 0; margin: 0 0 14pt; break-inside: avoid; }
+    .num { border: 1px solid #000; background: #fff; color: #000; }
     .go { background: none; color: #000; padding: 0; border: 0; text-decoration: underline; }
   }
 </style>
 </head>
 <body>
-<header class="top">
+<header class="top" id="top">
   <div class="wrap">
     <h1>Music Leader Guide</h1>
     <p>Grace Baptist Church &middot; step by step</p>
@@ -136,13 +128,8 @@
 <main class="wrap">
   <div class="layout">
     <ol class="steps" id="stepList" aria-label="Steps"></ol>
-    <div class="card" id="panel" role="tabpanel">
-      <div class="progress"><span id="count"></span><div class="bar"><span id="fill"></span></div></div>
+    <div id="panel" role="tabpanel">
       <div id="stepBox"></div>
-      <div class="nav">
-        <button type="button" id="back">&larr; Back</button>
-        <button type="button" class="next" id="next">Next &rarr;</button>
-      </div>
     </div>
   </div>
 </main>
@@ -161,12 +148,12 @@
     <a class="go" href="https://gracetoanderson.com/musicorder" target="_blank" rel="noopener">Order of service builder</a>
     <a class="go alt" href="https://davidluttrull.github.io/grace-music/packet.html" target="_blank" rel="noopener">Song packet</a>
     <a class="go alt" href="https://gracetoanderson.com/musicschedule" target="_blank" rel="noopener">Volunteer schedule</a>
-    <div class="tip"><b>The week at a glance:</b> by <b>Thursday noon</b>, save the order of service, its PDF, and the song packet. The team email goes out Thursday afternoon, and you print the bulletin inserts before Sunday.</div>
+    <div class="tip"><b>The week at a glance:</b> by <b>Tuesday noon</b>, save the order of service, its PDF, and the song packet. The team email goes out Tuesday afternoon, and you print the handouts before Sunday.</div>
   </section>
 
   <section class="step" data-title="Open the Sunday">
     <h2>Open the Sunday in the builder</h2>
-    <span class="when">Early in the week</span>
+    <span class="when">Sunday or Monday</span>
     <a class="go" href="https://gracetoanderson.com/musicorder" target="_blank" rel="noopener">Open the builder</a>
     <ol>
       <li>Pick the Sunday in the date list at the top. One sheet holds the morning and evening services.</li>
@@ -209,7 +196,7 @@
 
   <section class="step" data-title="Save the PDF">
     <h2>Save the order of service PDF</h2>
-    <span class="when">Builder, by Thursday noon</span>
+    <span class="when">Builder, by Tuesday noon</span>
     <ol>
       <li>Click <span class="ui">Save PDF</span>. Chrome's print window opens.</li>
       <li>Set <b>Destination</b> to <b>Save as PDF</b> and click <span class="ui">Save</span>. The file is already named for you, like <code>2026-11-01_Order of Service</code>.</li>
@@ -220,7 +207,7 @@
 
   <section class="step" data-title="Make the song packet">
     <h2>Make the song packet</h2>
-    <span class="when">By Thursday noon</span>
+    <span class="when">By Tuesday noon</span>
     <p>Click <span class="ui">Song packet</span> at the top of the builder. It opens the same Sunday.</p>
     <a class="go alt" href="https://davidluttrull.github.io/grace-music/packet.html" target="_blank" rel="noopener">Or open the song packet page</a>
     <ol>
@@ -235,23 +222,23 @@
 
   <section class="step" data-title="Team email">
     <h2>Send the team email</h2>
-    <span class="when">Thursday afternoon</span>
-    <p>The email to the music team comes from David's personal Gmail. Every Thursday at noon, two drafts appear there (one for each half of the team), with the order of service and song packets attached.</p>
+    <span class="when">Tuesday afternoon</span>
+    <p>The email to the music team comes from David's personal Gmail. Every Tuesday at noon, two drafts appear there (one for each half of the team), with the order of service and song packets attached.</p>
     <ul>
-      <li>Before Thursday, write a personal note and any extra notes in the builder's <b>Team email</b> box (at the bottom of the Sunday), then <span class="ui">Save</span>.</li>
+      <li>Before Tuesday noon, write a personal note and any extra notes in the builder's <b>Team email</b> box (at the bottom of the Sunday), then <span class="ui">Save</span>.</li>
       <li>Need them sooner? Click <span class="ui">Make email drafts</span> in that box.</li>
       <li>Open Gmail → <b>Drafts</b>, read both over, and send them.</li>
     </ul>
     <div class="heads"><b>Make email drafts</b> replaces drafts already made for that Sunday, so use it before you edit the drafts in Gmail, not after.</div>
   </section>
 
-  <section class="step" data-title="Print">
-    <h2>Print the bulletin inserts</h2>
+  <section class="step" data-title="Print the handouts">
+    <h2>Print the handouts</h2>
     <span class="when">Before Sunday</span>
     <ol>
       <li>Open the Sunday in the builder and click <span class="ui">Print</span>.</li>
       <li>In Chrome's print window, pick the printer. Leave <b>Scale</b> at 100% and turn off <b>Headers and footers</b>.</li>
-      <li>Each page has three copies (or two). Cut them apart.</li>
+      <li>Each page has three copies (or two). Cut them apart and hand them out to the team.</li>
     </ol>
     <div class="tip">If you just used <b>Save PDF</b>, Chrome may still have <b>Save as PDF</b> picked. Switch it back to the printer.</div>
     <p><b>That's it for this Sunday.</b></p>
@@ -352,48 +339,41 @@
 
 <script>
   const $ = (s) => document.querySelector(s);
-  const KEY = 'gbc-leader-guide';
-  const state = { tab: 'sunday', step: { sunday: 0, months: 0 } };
-  try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* private window */ }
-  const remember = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } };
+  const KEY = 'gbc-leader-guide-tab';
+  let tab = 'sunday';
+  try { tab = localStorage.getItem(KEY) === 'months' ? 'months' : 'sunday'; } catch (e) { /* private window */ }
+  let spy = null;
 
-  let steps = [];
-  function showTab(tab) {
-    state.tab = tab;
-    document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  // Each tab is one page of numbered steps; the list on the left jumps to them.
+  function showTab(name, keepScroll) {
+    tab = name;
+    try { localStorage.setItem(KEY, name); } catch (e) { /* ignore */ }
+    document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     $('#stepBox').innerHTML = '';
-    $('#stepBox').appendChild($('#' + tab).content.cloneNode(true));
-    steps = [...$('#stepBox').querySelectorAll('.step')];
-    $('#stepList').innerHTML = steps.map((s, i) =>
-      '<li><button type="button" data-i="' + i + '"><span class="n">' + (i + 1) + '</span>' + s.dataset.title + '</button></li>').join('');
-    showStep(Math.min(state.step[tab] || 0, steps.length - 1), false);
-  }
-  function showStep(i, scroll) {
-    state.step[state.tab] = i;
-    remember();
-    steps.forEach((s, k) => { s.hidden = k !== i; });
-    $('#stepList').querySelectorAll('button').forEach((b, k) => {
-      b.classList.toggle('current', k === i);
-      b.classList.toggle('done', k < i);
+    $('#stepBox').appendChild($('#' + name).content.cloneNode(true));
+    const steps = [...$('#stepBox').querySelectorAll('.step')];
+    steps.forEach((s, i) => {
+      s.id = name + '-' + (i + 1);
+      s.querySelector('h2').insertAdjacentHTML('afterbegin', '<span class="num">' + (i + 1) + '</span>');
+      if (i) s.insertAdjacentHTML('beforeend', '<a class="top-link" href="#top">Back to top ↑</a>');
     });
-    $('#count').textContent = 'Step ' + (i + 1) + ' of ' + steps.length;
-    $('#fill').style.width = ((i + 1) / steps.length * 100) + '%';
-    $('#back').disabled = i === 0;
-    const last = i === steps.length - 1;
-    $('#next').textContent = last ? 'Start over' : 'Next →';
-    if (scroll) $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' });
+    $('#stepList').innerHTML = steps.map((s, i) =>
+      '<li><a href="#' + s.id + '"><span class="n">' + (i + 1) + '</span>' + s.dataset.title + '</a></li>').join('');
+    if (spy) spy.disconnect();
+    spy = new IntersectionObserver((entries) => {
+      const seen = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (!seen) return;
+      $('#stepList').querySelectorAll('a').forEach((a) => a.classList.toggle('current', a.getAttribute('href') === '#' + seen.target.id));
+    }, { rootMargin: '0px 0px -65% 0px' });
+    steps.forEach((s) => spy.observe(s));
+    if (!keepScroll) window.scrollTo(0, 0);
   }
-  document.querySelectorAll('.tab').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
-  $('#stepList').onclick = (e) => { const b = e.target.closest('button'); if (b) showStep(Number(b.dataset.i), false); };
-  $('#back').onclick = () => showStep(Math.max(0, state.step[state.tab] - 1), true);
-  $('#next').onclick = () => { const i = state.step[state.tab]; showStep(i === steps.length - 1 ? 0 : i + 1, true); };
-  document.addEventListener('keydown', (e) => {
-    if (e.target.closest('input, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === 'ArrowRight' && state.step[state.tab] < steps.length - 1) showStep(state.step[state.tab] + 1, false);
-    if (e.key === 'ArrowLeft' && state.step[state.tab] > 0) showStep(state.step[state.tab] - 1, false);
-  });
+  document.querySelectorAll('.tab').forEach((b) => { b.onclick = () => { history.replaceState(null, '', '?tab=' + b.dataset.tab); showTab(b.dataset.tab); }; });
+
   const asked = new URLSearchParams(location.search).get('tab');
-  showTab(asked === 'months' || asked === 'sunday' ? asked : state.tab === 'months' ? 'months' : 'sunday');
+  const hash = location.hash.slice(1).split('-')[0];
+  showTab(['sunday', 'months'].includes(hash) ? hash : ['sunday', 'months'].includes(asked) ? asked : tab, true);
+  if (location.hash) { const el = document.getElementById(location.hash.slice(1)); if (el) el.scrollIntoView(); }
 </script>
 </body>
 </html>

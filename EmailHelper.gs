@@ -6,7 +6,7 @@
  * personal address (school addresses get flagged as spam when they send to
  * this many people). See SETUP.md, "Weekly song email".
  *
- * Every Thursday around noon it makes this week's email as two Gmail drafts,
+ * Every Tuesday around noon it makes this week's email as two Gmail drafts,
  * one for each half of the team (the same two BCC lists as before), and emails
  * David that they're ready. Nothing is ever sent; David adds his personal
  * touch and sends them. The builder's "Make email drafts" button runs it on
@@ -24,7 +24,8 @@
 const FEED_URL = 'https://script.google.com/macros/s/AKfycbyN_FOd4twDKmMrDk5l3NqTmKRJrKhIC3kUgkuumCKGoxK_wlkFxZlWevtGUyPtSnPE8Q/exec';
 const LISTS_PROP = 'LISTS_SHEET_ID';
 const KEY_PROP = 'HELPER_KEY';
-const DRAFT_HOUR = 12;                // Thursday around noon
+const DRAFT_DAY = 'TUESDAY';          // drafts are made Tuesday around noon
+const DRAFT_HOUR = 12;
 const CHOIR_LEADER = 'Kevin Plew';    // leads the choir unless the order says otherwise
 const SENT_SEARCH = 'in:sent subject:"Upcoming Assignments"';
 
@@ -39,7 +40,8 @@ const CANCEL_PREFIX = /^\s*(cancel+ed|no\b.*?\bservice)\s*(?:[–—:-]\s*)?/i;
 
 // ---------- Setup (run these from the editor) ----------
 
-/** Run once: makes the recipient lists, a private key for the builder's button, and the Thursday trigger. */
+/** Run once: makes the recipient lists, a private key for the builder's button, and the Tuesday trigger.
+ * Running it again (after a change to DRAFT_DAY or DRAFT_HOUR) moves the trigger and leaves the lists and key alone. */
 function setupEmailHelper() {
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty(KEY_PROP)) props.setProperty(KEY_PROP, Utilities.getUuid().replace(/-/g, '').slice(0, 16));
@@ -63,8 +65,9 @@ function setupEmailHelper() {
   ScriptApp.getProjectTriggers()
     .filter((t) => t.getHandlerFunction() === 'weeklyDrafts')
     .forEach((t) => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('weeklyDrafts').timeBased().onWeekDay(ScriptApp.WeekDay.THURSDAY).atHour(DRAFT_HOUR).create();
-  console.log('Drafts will be made every Thursday around ' + DRAFT_HOUR + ':00. Next: deploy as a web app, then run builderLink.');
+  ScriptApp.newTrigger('weeklyDrafts').timeBased().onWeekDay(ScriptApp.WeekDay[DRAFT_DAY]).atHour(DRAFT_HOUR).create();
+  const day = DRAFT_DAY.charAt(0) + DRAFT_DAY.slice(1).toLowerCase();
+  console.log('Drafts will be made every ' + day + ' around ' + DRAFT_HOUR + ':00. If this is a first-time setup: deploy as a web app, then run builderLink.');
 }
 
 /** Run after deploying the web app: prints the link to paste into the builder's "Make email drafts" button. */
@@ -88,7 +91,7 @@ function makeDraftsNow() {
 
 // ---------- Triggers ----------
 
-/** Thursday trigger. Leaves drafts alone if they were already made (and maybe edited) this week. */
+/** Weekly trigger (Tuesday). Leaves drafts alone if they were already made (and maybe edited) this week. */
 function weeklyDrafts() {
   const sunday = comingSunday_();
   const subject = subjectFor_(sunday);
