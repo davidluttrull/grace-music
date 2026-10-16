@@ -121,7 +121,7 @@ The history from the old sheet is on the Song Log with the source "Imported". Yo
 
 A helper script in your personal Google account (dmluttrull@gmail.com) makes the weekly team email for you as two Gmail drafts, one for each half of the team, the same as the two emails you've been sending. It never sends anything: you add your personal touch and send both.
 
-Every Tuesday around noon it makes the drafts for the coming Sunday and emails you that they're ready. Each draft has:
+When you click **Make email drafts** in the builder, it makes the drafts for that Sunday. Each draft has:
 
 - "Good afternoon," and your personal note from the builder (or "Hope you've had a great week!").
 - **Notes**: no-service and Lord's Supper notes from Service Notes, anything unusual in Sunday's saved order (the choir led by Kevin Plew, a missionary presentation, Communion, a baptism), any song marked *New*, and your extra notes from the builder. If there's nothing, it says "This coming Sunday is a normal order of service."
@@ -144,10 +144,12 @@ Every Tuesday around noon it makes the drafts for the coming Sunday and emails y
 
 1. Make the order of service in the builder. In the **Team email** box at the bottom, write your personal note and any extra notes (one per line), then **Save**.
 2. Save the PDF (**Save PDF**) into that month's folder in Orders of Service, and make the song packet on the **Song packet** page (it saves `YYYY-MM-DD_AM.pdf` there for you).
-3. Tuesday around noon, the drafts appear in Gmail and you get a "drafts are ready" email. To make them sooner, click **Make email drafts** in the builder. It saves first, then opens a page that says what was attached.
+3. On Tuesday, once the PDFs are in the folder, click **Make email drafts** in the builder. It saves first, then opens a page that says what was attached.
 4. Open Gmail → Drafts, look both over, and send them.
 
-The Tuesday run leaves drafts alone if they were already made that week, so edits you made in Gmail are safe. **Make email drafts** replaces them, so use it before you edit the drafts, not after. To change who gets the email, edit the Song Email Lists sheet. To run it without the builder, run **makeDraftsNow** in the Song Email project. To move the drafts to another day or hour, change `DRAFT_DAY` or `DRAFT_HOUR` at the top of `EmailHelper.gs` and run **setupEmailHelper** again. It moves the weekly run and leaves your lists alone.
+**Make email drafts** replaces drafts already made for that Sunday, so use it before you edit the drafts, not after. To change who gets the email, edit the Song Email Lists sheet. To run it without the builder, run **makeDraftsNow** in the Song Email project.
+
+To have the drafts made automatically every week instead, set `DRAFT_DAY` at the top of `EmailHelper.gs` to a day (`'TUESDAY'`) and run **setupEmailHelper** again. That weekly run leaves drafts alone if they were already made that week, and emails you when they're ready. Set it back to `''` and run **setupEmailHelper** to turn it off. Either way, your lists stay as they are.
 
 ## Order of service builder
 
