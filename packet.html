@@ -84,6 +84,7 @@
   .choice .meta { padding: 6px 8px 8px; font-size: 12px; line-height: 1.3; min-height: 3.6em; }
   .choice .meta b { display: block; font-weight: 600; word-break: break-word; }
   .choice .meta span { color: var(--muted); }
+  .choice .meta b.some { display: inline; color: var(--brand-mid); }
   .check { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--tint-line); background: rgba(255,255,255,.95); color: transparent; font-size: 18px; font-weight: 700; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
   .check:hover { border-color: var(--brand); color: var(--tint-line); }
   .choice.chosen .check { background: var(--brand); border-color: var(--brand); color: #fff; }
@@ -125,7 +126,14 @@
   .v-head .btn { border-color: transparent; }
   .v-head .btn.chosen { background: var(--brand); }
   .v-pages { flex: 1; overflow: auto; padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
-  .v-pages canvas { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.2); max-width: 100%; height: auto; }
+  .v-pages canvas { display: block; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.2); max-width: 100%; height: auto; }
+  .v-page { position: relative; max-width: 100%; cursor: pointer; }
+  .v-page canvas { width: 100%; }
+  .v-page.off canvas { opacity: .3; }
+  .v-toggle { position: absolute; top: 10px; left: 10px; min-height: 32px; padding: 0 12px; border-radius: 16px; border: 2px solid var(--brand); background: var(--brand); color: #fff; font-weight: 600; font-size: 13px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+  .v-page.off .v-toggle { background: #fff; color: var(--muted); border-color: var(--tint-line); }
+  .v-range { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #CFE3C0; }
+  .v-range input { width: 110px; height: 30px; border: 0; border-radius: 7px; padding: 0 8px; color: var(--ink); }
   .v-pages .wait { color: var(--muted); padding: 40px; }
 </style>
 </head>
@@ -178,6 +186,8 @@
       <button type="button" class="btn small" id="vPrev" title="Previous option (←)">‹</button>
       <div class="v-title" id="vTitle"></div>
       <button type="button" class="btn small" id="vNext" title="Next option (→)">›</button>
+      <label class="v-range" title="Which pages of this PDF go in the packet, like 4-6 or 1, 3">Pages <input id="vRange" placeholder="all" autocomplete="off"></label>
+      <button type="button" class="btn small" id="vAll" hidden>All pages</button>
       <button type="button" class="btn small primary" id="vPick">Use this one</button>
       <button type="button" class="btn small" id="vClose">Close</button>
     </div>
@@ -208,7 +218,37 @@
   let uid = 0;
   let busy = false;           // building or saving the packet
   const bytesOf = new Map();  // file id -> Promise<Uint8Array>
-  const looks = new Map();    // file id -> { thumb, pages } | { error }
+  const looks = new Map();    // file id (or "id|page") -> { thumb, pages } | { error }
+
+  // Some PDFs hold a song in several keys, so an item can use only some of a PDF's pages:
+  // it.pages is { file id: [4, 5, 6] }; a file that isn't in it uses every page.
+  const pagesFor = (it, id) => (it.pages && it.pages[id]) || null;
+  // [4, 5, 6, 9] -> "4-6, 9"
+  function pageText(list) {
+    const out = [];
+    list.forEach((p, i) => {
+      if (i && p === list[i - 1] + 1) out[out.length - 1][1] = p; else out.push([p, p]);
+    });
+    return out.map(([a, b]) => (a === b ? String(a) : a + '–' + b)).join(', ');
+  }
+  // "4-6, 9" -> [4, 5, 6, 9]; null for "all" or blank
+  function parsePages(text, total) {
+    const t = String(text || '').trim().toLowerCase();
+    if (!t || t === 'all') return null;
+    const set = new Set();
+    t.split(/[,\s]+/).filter(Boolean).forEach((part) => {
+      const m = /^(\d+)(?:\s*[-–]\s*(\d+))?$/.exec(part);
+      if (!m) return;
+      const a = Number(m[1]), b = Number(m[2] || m[1]);
+      for (let p = Math.min(a, b); p <= Math.max(a, b); p++) if (p >= 1 && (!total || p <= total)) set.add(p);
+    });
+    return set.size ? [...set].sort((x, y) => x - y) : null;
+  }
+  // A remembered pick is "file id" or "file id|4,5,6".
+  function parsePick(value) {
+    const [id, pages] = String(value || '').split('|');
+    return { id, pages: pages ? pages.split(',').map(Number).filter((n) => n > 0) : null };
+  }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -347,18 +387,21 @@
     const names = [...new Set([parsed.title].concat(row ? [row.title].concat(row.other ? row.other.split(/\s*;\s*/) : []) : []).filter(Boolean))];
     if (!parsed.title && row) parsed.title = row.title;
     const songKey = row ? row.id : 't:' + norm(parsed.title);
-    const remembered = byId.has(setup.picks[songKey]) ? setup.picks[songKey] : null;
+    const pick = parsePick(setup.picks[songKey]);
+    const remembered = byId.has(pick.id) ? pick.id : null;
     const options = matchFiles(names, remembered);
     if (remembered && !options.includes(remembered)) options.unshift(remembered);
     return { uid: ++uid, extra: false, slot: s.slot, title: parsed.title, num: parsed.num || (row && row.num) || '', verses: s.verses,
-      songKey, names, options, chosen: remembered || (options.length === 1 ? options[0] : null), skip: false, showAll: false };
+      songKey, names, options, chosen: remembered || (options.length === 1 ? options[0] : null), skip: false, showAll: false,
+      pages: remembered && pick.pages ? { [remembered]: pick.pages } : {} };
   }
 
-  function extraItem(title, chosen) {
+  function extraItem(title, chosen, pages) {
     const options = title ? matchFiles([title]) : [];
     if (chosen && byId.has(chosen) && !options.includes(chosen)) options.unshift(chosen);
     return { uid: ++uid, extra: true, slot: 'Added', title: title || '', num: '', verses: '', songKey: '', names: [title],
-      options, chosen: chosen && byId.has(chosen) ? chosen : options.length === 1 ? options[0] : null, skip: false, showAll: false };
+      options, chosen: chosen && byId.has(chosen) ? chosen : options.length === 1 ? options[0] : null, skip: false, showAll: false,
+      pages: chosen && pages && pages.length ? { [chosen]: pages } : {} };
   }
 
   // Puts back what was in this packet the last time it was saved: picks, songs left out, and added items.
@@ -367,11 +410,15 @@
     if (!saved) return list;
     const out = list.slice();
     saved.forEach((s, i) => {
-      if (s.extra) { out.splice(Math.min(i, out.length), 0, extraItem(s.title, s.file)); return; }
+      if (s.extra) { out.splice(Math.min(i, out.length), 0, extraItem(s.title, s.file, s.pages)); return; }
       const it = out.find((x) => !x.extra && norm(x.title) === norm(s.title));
       if (!it) return;
       it.skip = !!s.skip;
-      if (s.file && byId.has(s.file)) { it.chosen = s.file; if (!it.options.includes(s.file)) it.options.unshift(s.file); }
+      if (s.file && byId.has(s.file)) {
+        it.chosen = s.file;
+        if (!it.options.includes(s.file)) it.options.unshift(s.file);
+        it.pages = s.pages && s.pages.length ? { [s.file]: s.pages } : {};
+      }
     });
     return out;
   }
@@ -428,33 +475,43 @@
     return canvas;
   }
 
-  // First-page picture and page count for a choice.
-  function look(id) {
-    if (looks.has(id)) return;
-    looks.set(id, null);
+  // A choice's picture is its first page, or the first page the item uses, plus the page count.
+  const firstPage = (it, id) => { const sel = pagesFor(it, id); return sel ? sel[0] : 1; };
+  const lookKey = (id, page) => (page > 1 ? id + '|' + page : id);
+  function look(id, page) {
+    page = page || 1;
+    if (page > 1) look(id);
+    const key = lookKey(id, page);
+    if (looks.has(key)) return;
+    looks.set(key, null);
     getBytes(id).then(openPdf).then(async (doc) => {
-      const canvas = await renderPage(await doc.getPage(1), 180, 2);
-      looks.set(id, { thumb: canvas.toDataURL('image/jpeg', 0.8), pages: doc.numPages });
+      const canvas = await renderPage(await doc.getPage(Math.min(page, doc.numPages)), 180, 2);
+      looks.set(key, { thumb: canvas.toDataURL('image/jpeg', 0.8), pages: doc.numPages });
       doc.destroy();
-    }).catch((err) => looks.set(id, { error: err.message || 'Couldn’t open this PDF.' }))
+    }).catch((err) => looks.set(key, { error: err.message || 'Couldn’t open this PDF.' }))
       .finally(() => { updateLook(id); renderSummary(); });
   }
+  const lookFor = (it, id) => look(id, firstPage(it, id));
+  const pageCount = (id) => (looks.get(id) || {}).pages || 0;
 
-  function thumbHtml(id) {
-    const l = looks.get(id);
+  function thumbHtml(it, id) {
+    const l = looks.get(lookKey(id, firstPage(it, id)));
     if (l && l.thumb) return '<img src="' + l.thumb + '" alt="">';
     return '<span class="wait">' + (l && l.error ? esc(l.error) : 'Loading…') + '</span>';
   }
-  function metaHtml(id) {
+  function metaHtml(it, id) {
     const f = byId.get(id);
-    const l = looks.get(id);
-    const pages = l && l.pages ? ' · ' + plural(l.pages, 'page') : '';
+    const total = pageCount(id);
+    const sel = pagesFor(it, id);
+    const pages = sel ? ' · <b class="some">' + (sel.length === 1 ? 'page ' : 'pages ') + esc(pageText(sel)) + (total ? ' of ' + total : '') + '</b>' : total ? ' · ' + plural(total, 'page') : '';
     return '<b>' + esc(fileTitle(f)) + '</b><span>' + esc(f.folder || 'Song PDFs') + pages + '</span>';
   }
   function updateLook(id) {
     document.querySelectorAll('.choice[data-id="' + CSS.escape(id) + '"]').forEach((el) => {
-      el.querySelector('.thumb').innerHTML = thumbHtml(id);
-      el.querySelector('.meta').innerHTML = metaHtml(id);
+      const it = itemOf(el);
+      if (!it) return;
+      el.querySelector('.thumb').innerHTML = thumbHtml(it, id);
+      el.querySelector('.meta').innerHTML = metaHtml(it, id);
     });
   }
 
@@ -469,8 +526,8 @@
         (it.verses ? '<span class="vv">' + esc(it.verses) + '</span>' : '') + '</h2>';
     const choices = shownIds.map((id) =>
       '<div class="choice' + (it.chosen === id ? ' chosen' : '') + '" data-id="' + esc(id) + '">' +
-      '<button type="button" class="thumb" data-act="view" title="Look closer">' + thumbHtml(id) + '</button>' +
-      '<div class="meta">' + metaHtml(id) + '</div>' +
+      '<button type="button" class="thumb" data-act="view" title="Look closer and pick pages">' + thumbHtml(it, id) + '</button>' +
+      '<div class="meta">' + metaHtml(it, id) + '</div>' +
       '<button type="button" class="check" data-act="pick" aria-pressed="' + (it.chosen === id) + '" title="' + (it.chosen === id ? 'Chosen (click to clear)' : 'Use this one') + '">✓</button></div>').join('');
     return '<section class="panel' + (it.skip ? ' skipped' : '') + '" data-u="' + it.uid + '">' +
       '<div class="panel-head">' + head +
@@ -490,14 +547,14 @@
   function renderItems() {
     $('#items').innerHTML = items.map(itemHtml).join('');
     $('#addExtra').hidden = !setup;
-    items.forEach((it) => (it.showAll ? it.options : it.options.slice(0, SHOW_CHOICES)).concat(it.chosen ? [it.chosen] : []).forEach(look));
+    items.forEach((it) => (it.showAll ? it.options : it.options.slice(0, SHOW_CHOICES)).concat(it.chosen ? [it.chosen] : []).forEach((id) => lookFor(it, id)));
     renderSummary();
   }
   function renderItem(it) {
     const el = document.querySelector('[data-u="' + it.uid + '"]');
     if (!el) return renderItems();
     el.outerHTML = itemHtml(it, items.indexOf(it));
-    (it.showAll ? it.options : it.options.slice(0, SHOW_CHOICES)).forEach(look);
+    (it.showAll ? it.options : it.options.slice(0, SHOW_CHOICES)).concat(it.chosen ? [it.chosen] : []).forEach((id) => lookFor(it, id));
     renderSummary();
   }
 
@@ -507,9 +564,11 @@
     let pages = 0, known = true;
     $('#summaryList').innerHTML = list.map((it) => {
       if (!it.chosen) return '<li class="missing">' + esc(it.title || 'Added item') + '<small>No PDF chosen</small></li>';
-      const l = looks.get(it.chosen);
-      if (l && l.pages) pages += l.pages; else known = false;
-      return '<li>' + esc(it.title || 'Added item') + '<small>' + esc(fileTitle(byId.get(it.chosen))) + (l && l.pages ? ' · ' + plural(l.pages, 'page') : '') + '</small></li>';
+      const sel = pagesFor(it, it.chosen);
+      const n = sel ? sel.length : pageCount(it.chosen);
+      if (n) pages += n; else known = false;
+      return '<li>' + esc(it.title || 'Added item') + '<small>' + esc(fileTitle(byId.get(it.chosen))) +
+        (sel ? (sel.length === 1 ? ' · page ' : ' · pages ') + esc(pageText(sel)) : n ? ' · ' + plural(n, 'page') : '') + '</small></li>';
     }).join('') || '<li class="missing">Nothing chosen yet</li>';
     const chosen = list.filter((it) => it.chosen).length;
     const missing = list.length - chosen;
@@ -678,18 +737,19 @@
   let viewing = null;   // { it, id }
   let viewToken = 0;
   async function view(it, id) {
-    viewing = { it, id };
+    viewing = { it, id, total: 0, last: 0 };
     const d = $('#viewer');
     if (!d.open) d.showModal();
     const list = it.options;
     const n = list.indexOf(id);
     const f = byId.get(id);
     $('#vTitle').innerHTML = esc(it.title || 'Added item') + ' <small>' + esc(fileTitle(f)) + ' · ' + esc(f.folder || 'Song PDFs') +
-      (list.length > 1 ? ' · option ' + (n + 1) + ' of ' + list.length : '') + '</small>';
+      (list.length > 1 ? ' · option ' + (n + 1) + ' of ' + list.length : '') + ' · click a page to leave it out</small>';
     $('#vPrev').disabled = n <= 0;
     $('#vNext').disabled = n >= list.length - 1;
-    $('#vPick').textContent = it.chosen === id ? '✓ Chosen' : 'Use this one';
-    $('#vPick').classList.toggle('chosen', it.chosen === id);
+    showPick();
+    $('#vRange').value = '';
+    $('#vAll').hidden = true;
     const pages = $('#vPages');
     pages.innerHTML = '<div class="wait">Loading…</div>';
     pages.scrollTop = 0;
@@ -698,18 +758,75 @@
       const doc = await openPdf(await getBytes(id));
       if (token !== viewToken) return doc.destroy();
       pages.innerHTML = '';
+      viewing.total = doc.numPages;
+      showPages();
       const width = Math.min(860, pages.clientWidth - 28);
       for (let p = 1; p <= doc.numPages; p++) {
         const canvas = await renderPage(await doc.getPage(p), width, window.devicePixelRatio || 1);
         if (token !== viewToken) break;
-        canvas.style.width = width + 'px';
-        pages.appendChild(canvas);
+        const box = document.createElement('div');
+        box.className = 'v-page';
+        box.style.width = width + 'px';
+        box.dataset.p = p;
+        box.innerHTML = '<button type="button" class="v-toggle"></button>';
+        box.appendChild(canvas);
+        pages.appendChild(box);
+        showPages();
       }
       doc.destroy();
     } catch (err) {
       if (token === viewToken) pages.innerHTML = '<div class="wait">Couldn’t open this PDF: ' + esc(err.message) + '</div>';
     }
   }
+  function showPick() {
+    const { it, id } = viewing;
+    $('#vPick').textContent = it.chosen === id ? '✓ Chosen' : 'Use this one';
+    $('#vPick').classList.toggle('chosen', it.chosen === id);
+  }
+  // Marks the pages in use, and fills in the Pages box.
+  function showPages() {
+    const { it, id, total } = viewing;
+    const sel = pagesFor(it, id);
+    document.querySelectorAll('#vPages .v-page').forEach((box) => {
+      const p = Number(box.dataset.p);
+      const on = !sel || sel.includes(p);
+      box.classList.toggle('off', !on);
+      box.querySelector('.v-toggle').textContent = (on ? '✓ Page ' : 'Left out · page ') + p;
+      box.title = on ? 'Click to leave this page out (Shift-click for a run of pages)' : 'Click to use this page';
+    });
+    if (document.activeElement !== $('#vRange')) $('#vRange').value = sel ? pageText(sel).replace(/–/g, '-') : '';
+    $('#vRange').placeholder = total ? 'all ' + total : 'all';
+    $('#vAll').hidden = !sel;
+  }
+  // Changing the pages of a PDF also picks it for the song.
+  function setPages(sel) {
+    const { it, id, total } = viewing;
+    if (sel && !sel.length) return;   // at least one page
+    if (!sel || (total && sel.length >= total)) delete it.pages[id]; else it.pages[id] = sel;
+    if (it.chosen !== id) { it.chosen = id; if (!it.options.includes(id)) it.options.unshift(id); }
+    lookFor(it, id);
+    renderItem(it);
+    showPick();
+    showPages();
+  }
+  $('#vPages').addEventListener('click', (e) => {
+    const box = e.target.closest('.v-page');
+    if (!box || !viewing || !viewing.total) return;
+    const { it, id, total } = viewing;
+    const p = Number(box.dataset.p);
+    const all = Array.from({ length: total }, (_, i) => i + 1);
+    const now = new Set(pagesFor(it, id) || all);
+    const on = !now.has(p);
+    const from = e.shiftKey && viewing.last ? Math.min(viewing.last, p) : p;
+    const to = e.shiftKey && viewing.last ? Math.max(viewing.last, p) : p;
+    for (let q = from; q <= to; q++) { if (on) now.add(q); else now.delete(q); }
+    viewing.last = p;
+    setPages(all.filter((q) => now.has(q)));
+  });
+  $('#vRange').addEventListener('change', () => { if (viewing) setPages(parsePages($('#vRange').value, viewing.total)); });
+  $('#vRange').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); $('#vRange').blur(); } });
+  $('#vAll').onclick = () => { if (viewing) setPages(null); };
+
   function step(by) {
     if (!viewing) return;
     const list = viewing.it.options;
@@ -742,14 +859,16 @@
     for (let i = 0; i < list.length; i++) {
       setStatus('Combining ' + (i + 1) + ' of ' + list.length + '…');
       const bytes = await getBytes(list[i].chosen);
+      const sel = pagesFor(list[i], list[i].chosen);
+      const use = (count) => (sel ? sel.filter((p) => p <= count) : Array.from({ length: count }, (_, k) => k + 1));
       let src = null;
       try { src = await PDFDocument.load(bytes, { ignoreEncryption: true }); } catch (e) { src = null; }
       if (src && !src.isEncrypted) {
-        const pages = await out.copyPages(src, src.getPageIndices());
+        const pages = await out.copyPages(src, use(src.getPageCount()).map((p) => p - 1));
         pages.forEach((p) => out.addPage(p));
       } else {
         const doc = await openPdf(bytes);
-        for (let p = 1; p <= doc.numPages; p++) {
+        for (const p of use(doc.numPages)) {
           const page = await doc.getPage(p);
           const size = page.getViewport({ scale: 1 });
           const canvas = await renderPage(page, size.width, 200 / 72);
@@ -803,8 +922,12 @@
   $('#saveBtn').onclick = () => run('Save', async (bytes, list) => {
     setStatus('Saving to Drive…');
     const picks = {};
-    list.forEach((it) => { if (it.songKey) picks[it.songKey] = it.chosen; });
-    const packet = { items: items.map((it) => ({ title: it.title, extra: it.extra || undefined, skip: it.skip || undefined, file: it.chosen || undefined })) };
+    list.forEach((it) => {
+      const sel = pagesFor(it, it.chosen);
+      if (it.songKey) picks[it.songKey] = it.chosen + (sel ? '|' + sel.join(',') : '');
+    });
+    const packet = { items: items.map((it) => ({ title: it.title, extra: it.extra || undefined, skip: it.skip || undefined,
+      file: it.chosen || undefined, pages: (it.chosen && pagesFor(it, it.chosen)) || undefined })) };
     const res = await withCode('savePacket', { date: current.date, service: current.service, data: await toBase64(bytes), picks, packet });
     if (!res) { setStatus(''); return; }
     Object.assign(setup.picks, picks);

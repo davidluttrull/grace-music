@@ -579,8 +579,9 @@ function uploadPdf_(body) {
  * POST {action: 'savePacket', code, date, service, data, picks, packet}: puts
  * the combined PDF in Orders of Service / 2026 / 11_November as
  * "2026-11-01_AM.pdf". An older file with that name goes to the Drive trash.
- * picks is {song key: file id}, remembered for the next time each song comes
- * up; packet is the page's list, kept so the packet reopens the same way.
+ * picks is {song key: file id}, or "file id|4,5,6" when only some pages are
+ * used, remembered for the next time each song comes up; packet is the page's
+ * list, kept so the packet reopens the same way.
  */
 function savePacket_(body) {
   const refused = checkOrderCode_(body.code);
@@ -606,7 +607,7 @@ function savePacket_(body) {
     const picks = body.picks || {};
     Object.keys(picks).slice(0, 40).forEach((k) => {
       const id = String(picks[k] || '');
-      if (k.length <= 100 && /^[\w-]{10,80}$/.test(id)) keep['pick|' + k] = id;
+      if (k.length <= 100 && /^[\w-]{10,80}(\|\d{1,3}(,\d{1,3}){0,99})?$/.test(id)) keep['pick|' + k] = id;
     });
     keep['packet|' + date + '|' + service] = packet;
     props.setProperties(keep);
