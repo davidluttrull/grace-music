@@ -117,6 +117,38 @@ It matches by hymn number, but a hymn whose title matches wins, so "475 I'd Rath
 
 The history from the old sheet is on the Song Log with the source "Imported". You can add a missed date by hand: type the date in A and the song as you'd write it in **As written** (F), and the next update matches it.
 
+## Weekly song email
+
+A helper script in your personal Google account (dmluttrull@gmail.com) makes the weekly team email for you as two Gmail drafts, one for each half of the team, the same as the two emails you've been sending. It never sends anything: you add your personal touch and send both.
+
+Every Thursday around noon it makes the drafts for the coming Sunday and emails you that they're ready. Each draft has:
+
+- "Good afternoon," and your personal note from the builder (or "Hope you've had a great week!").
+- **Notes**: no-service and Lord's Supper notes from Service Notes, anything unusual in Sunday's saved order (the choir led by Kevin Plew, a missionary presentation, Communion, a baptism), any song marked *New*, and your extra notes from the builder. If there's nothing, it says "This coming Sunday is a normal order of service."
+- **Next Sunday**: the instrumentalists, offering, and special. **Two** and **Three Sundays Out**: offering and special, with that Sunday's Service Notes next to the date, or "TBA".
+- Your Gmail signature.
+- Attached: this Sunday's `YYYY-MM-DD_Order of Service.pdf` and `YYYY-MM-DD_AM.pdf`, and next Sunday's `YYYY-MM-DD_AM.pdf`, from the Orders of Service folder. Anything that isn't there yet is listed in the "drafts are ready" email, so you can attach it by hand.
+
+### Setting it up (one time)
+
+1. Share the **Orders of Service** folder from your school Drive with dmluttrull@gmail.com as a Viewer. (Done.)
+2. Signed in as **dmluttrull@gmail.com**, go to <https://script.google.com> and click **New project**. Name it **Song Email**.
+3. Delete what's in `Code.gs` and paste in this folder's `EmailHelper.gs`.
+4. Click **Project Settings** (the gear), check **Show "appsscript.json" manifest file in editor**, go back to the editor, open `appsscript.json`, and replace it with this folder's `EmailHelper.appsscript.json`. Save.
+5. Pick **setupEmailHelper** in the function dropdown and click **Run**. Allow the permissions (Gmail, Drive, Sheets, and running on a schedule); click **Advanced → Go to Song Email (unsafe)** if Google warns you. It makes a **Song Email Lists** sheet in your personal Drive with the two lists from your last song email; the Execution log has its link. Open it and check the lists.
+6. Click **Deploy → New deployment**, choose **Web app**, set **Execute as: Me** and **Who has access: Anyone**, and click **Deploy**.
+7. Pick **builderLink** and click **Run**. Copy the **Builder link** from the Execution log.
+8. In the builder, open a Sunday, click **Make email drafts** in the **Team email** box, and paste the link. That computer remembers it.
+
+### Each week
+
+1. Make the order of service in the builder. In the **Team email** box at the bottom, write your personal note and any extra notes (one per line), then **Save**.
+2. Save the PDF (**Save PDF**) into that month's folder in Orders of Service, and make the song packets (`YYYY-MM-DD_AM.pdf`) as usual.
+3. Thursday around noon, the drafts appear in Gmail and you get a "drafts are ready" email. To make them sooner, click **Make email drafts** in the builder. It saves first, then opens a page that says what was attached.
+4. Open Gmail → Drafts, look both over, and send them.
+
+The Thursday run leaves drafts alone if they were already made that week, so edits you made in Gmail are safe. **Make email drafts** replaces them, so use it before you edit the drafts, not after. To change who gets the email, edit the Song Email Lists sheet. To run it without the builder, run **makeDraftsNow** in the Song Email project.
+
 ## Order of service builder
 
 The builder makes the printed order of service from the same Sheet. Open <https://gracetoanderson.com/musicorder> on your computer. It forwards to <https://davidluttrull.github.io/grace-music/builder.html>, and it's laid out for a computer screen, not a phone.
@@ -139,7 +171,7 @@ To change the code, edit **ORDER_CODE** under **Project Settings → Script Prop
 6. The preview shows one copy exactly as it prints. If a week runs long, the text shrinks a little to fit; if it still doesn't fit, the preview says so.
 7. **Save** stores the sheet on the **Orders** tab, so you can finish it later or on another computer. Until you save, changes are kept on the computer you're using.
 8. **Print** prints two, three, or six copies on one landscape letter page; cut them apart. Use Chrome, leave Scale at 100%, and turn off Headers and footers. To keep a PDF for your Drive folder, choose **Save as PDF** as the printer.
-9. **Save PDF** makes a PDF of one copy, on a page the size of that sheet, for emailing as an attachment. It opens Chrome's print dialog: set **Destination** to **Save as PDF** and click **Save**. The file is named like "Order of Service 2026-11-01 Sunday". Chrome remembers the last destination, so switch it back to your printer the next time you use **Print**.
+9. **Save PDF** makes a PDF of one copy, on a page the size of that sheet, for emailing as an attachment. It opens Chrome's print dialog: set **Destination** to **Save as PDF** and click **Save**. The file is named like "2026-11-01_Order of Service", the same as the files in your Orders of Service folder. Put it in that week's month folder (Orders of Service → 2026 → 11_November) so the weekly email can attach it. Chrome remembers the last destination, so switch it back to your printer the next time you use **Print**.
 
 **Cancelling Sunday evening:** check **Cancelled** at the top of the Sunday Evening section and type a reason if you have one ("Thanksgiving Dinner"). The sheet prints "No Service – Thanksgiving Dinner" under Sunday Evening in place of the service. **Save** writes the same text to Sunday PM's Service Notes row in the Sheet, so the Sheet and the volunteer page show the service as cancelled too. It works the other way as well: a Sunday PM note you type in the Sheet that starts with "No Service" or "Cancelled" shows up checked in the builder, with the rest of the note as the reason. Uncheck Cancelled and Save to clear the note and bring the service back; its order is kept.
 

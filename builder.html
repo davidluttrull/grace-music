@@ -96,6 +96,8 @@
   .reason { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); max-width: 420px; }
   .reason input { height: 32px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; font: inherit; font-size: 14px; color: var(--ink); }
   .hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  .email-panel .reason { max-width: none; }
+  .email-panel textarea { width: 100%; border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 14px; color: var(--ink); resize: vertical; }
   .opts input[type=text] { height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; width: 170px; }
 
   /* ---------- Preview ---------- */
@@ -229,6 +231,8 @@
   // Same Apps Script web app as the volunteer page.
   const API_URL = 'https://script.google.com/macros/s/AKfycbyN_FOd4twDKmMrDk5l3NqTmKRJrKhIC3kUgkuumCKGoxK_wlkFxZlWevtGUyPtSnPE8Q/exec';
   const CODE_KEY = 'gbc-oos-code';
+  const EMAIL_LINK_KEY = 'gbc-oos-email-link';   // the email helper's web app link, with its key
+  const CHOIR_LEADER = 'Kevin Plew';
   const DRAFT_PREFIX = 'gbc-oos-draft|';
   const LAYOUT_KEY = 'gbc-oos-layout';
   const LAYOUTS = {
@@ -291,7 +295,7 @@
   const PRESETS = {
     'Hymn': () => song('Hymn', ''),
     'Special Song': () => text('Special', { italic: true }),
-    'Choir': () => text('Choir', { italic: true }),
+    'Choir': () => text('Choir', { italic: true, value: CHOIR_LEADER }),
     'Missionary Presentation': () => text('Missionary Presentation'),
     'Scripture Reading': () => text('Scripture Reading'),
     'Message': () => text('Message', { value: PASTOR }),
@@ -557,8 +561,58 @@
         '<div class="opts"><label><input type="checkbox" data-act="credits"' + (part.order.credits !== false ? ' checked' : '') + '> Show team credits</label>' +
         (needsLeader ? '<label>Music leader <input type="text" data-act="leader" value="' + esc(part.order.leader || '') + '" placeholder="Name"></label>' : '') +
         '</div>' + (part.custom ? teamHtml(part) : '') + '</div></section>';
-    }).join('');
+    }).join('') + emailHtml();
   }
+
+  // ---------- Weekly team email ----------
+  // The note and extra notes are saved with Sunday morning's order; the email helper
+  // (EmailHelper.gs, in David's personal Google account) reads them when it makes the drafts.
+  const emailPart = () => sheet.find((p) => p.svc.service === 'Sunday AM') || null;
+
+  function emailHtml() {
+    const part = emailPart();
+    if (!part) return '';
+    const email = part.order.email || {};
+    return '<section class="panel email-panel">' +
+      '<div class="panel-head"><h2>Team email</h2>' +
+      '<button type="button" class="btn small" id="emailBtn">Make email drafts</button>' +
+      '<span class="sub">The helper makes this week’s two Gmail drafts every Thursday at noon from the saved order, with the PDFs attached. ' +
+      'Make email drafts saves and makes them now (replacing any already made for this Sunday).</span></div>' +
+      '<div class="panel-body">' +
+      '<label class="reason">Personal note (goes after “Good afternoon,”)<textarea data-email="intro" rows="2" placeholder="Hope you’ve had a great week!">' + esc(email.intro || '') + '</textarea></label>' +
+      '<label class="reason" style="margin-top:8px">Extra notes, one per line (added under Notes)<textarea data-email="notes" rows="3" placeholder="Kristen Baisley will play piano for the Lord’s Supper.">' + esc(email.notes || '') + '</textarea></label>' +
+      '</div></section>';
+  }
+
+  async function makeEmailDrafts() {
+    let link = store((s) => s.getItem(EMAIL_LINK_KEY));
+    if (!link) {
+      link = (prompt('Paste the email helper link (it comes from running builderLink in the helper; see SETUP.md, "Weekly song email"):') || '').trim();
+      if (!link) return;
+      if (!/^https:\/\/script\.google\.com\/.+[?&]key=/.test(link)) { alert('That doesn’t look like the email helper link.'); return; }
+      store((s) => s.setItem(EMAIL_LINK_KEY, link));
+    }
+    const part = emailPart();
+    if (!part) return;
+    const win = window.open('about:blank', '_blank');   // opened now so the browser doesn't block it after saving
+    if (sheet.some((p) => p.dirty)) {
+      await save();
+      if (sheet.some((p) => p.dirty)) { if (win) win.close(); return; }
+    }
+    const url = link + '&date=' + part.svc.date;
+    if (win) win.location = url; else window.open(url, '_blank');
+  }
+
+  $('#editor').addEventListener('input', (e) => {
+    const field = e.target.dataset && e.target.dataset.email;
+    const part = field && emailPart();
+    if (!part) return;
+    part.order.email = Object.assign({}, part.order.email, { [field]: e.target.value });
+    changed(part);
+  });
+  $('#editor').addEventListener('click', (e) => {
+    if (e.target.id === 'emailBtn') makeEmailDrafts();
+  });
 
   function teamHtml(part) {
     const team = part.order.team;
@@ -825,10 +879,11 @@
   // One copy on a page its own size, for emailing. Chrome's print dialog saves it
   // when the Destination is "Save as PDF"; the file name comes from the page title.
   function pdfName() {
+    // Matches the Orders of Service folder ("2026-10-18_Order of Service"), so the email helper finds it.
     const svc = sheet.length ? sheet[0].svc : null;
     if (!svc) return 'Order of Service';
-    const kind = svc.service === 'Wednesday' ? 'Wednesday' : SERVICES.includes(svc.service) ? 'Sunday' : svc.service;
-    return 'Order of Service ' + svc.date + ' ' + kind;
+    if (svc.service === 'Sunday AM' || svc.service === 'Sunday PM') return svc.date + '_Order of Service';
+    return svc.date + '_' + svc.service + ' Order of Service';
   }
   function savePdf() {
     const L = LAYOUTS[layout];
