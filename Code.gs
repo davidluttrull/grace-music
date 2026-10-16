@@ -704,20 +704,24 @@ function cacheIndex_(files) {
   CacheService.getScriptCache().putAll(parts, PDF_INDEX_SECONDS);
 }
 
-/** One folder's files and folders, from the Drive API (one request per 1,000 instead of one per file). */
+/**
+ * One folder's files and folders, from the Drive service (one request per 1,000
+ * instead of one per file). Needs Services > Drive API added in Apps Script.
+ */
 function driveChildren_(folderId) {
+  if (typeof Drive === 'undefined') {
+    throw new Error('The Drive service is off. In Apps Script, click + next to Services, pick Drive API, and click Add.');
+  }
   const out = [];
   let page = '';
   do {
     const params = {
       q: "'" + folderId + "' in parents and trashed = false",
       fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime)',
-      pageSize: '1000',
+      pageSize: 1000,
     };
     if (page) params.pageToken = page;
-    const url = 'https://www.googleapis.com/drive/v3/files?' +
-      Object.keys(params).map((k) => k + '=' + encodeURIComponent(params[k])).join('&');
-    const res = JSON.parse(UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } }).getContentText());
+    const res = Drive.Files.list(params);
     (res.files || []).forEach((f) => out.push(f));
     page = res.nextPageToken || '';
   } while (page);
@@ -736,8 +740,9 @@ function prunePackets_(props) {
 }
 
 /**
- * Run once from the editor after pasting this code: Google asks to let the
- * script read and add files in Drive, then it lists the Song PDFs folder.
+ * Run once from the editor after pasting this code and adding the Drive API
+ * service: Google asks to let the script read and add files in Drive, then it
+ * lists the Song PDFs folder.
  */
 function setupSongPackets() {
   const files = pdfIndex_(true);

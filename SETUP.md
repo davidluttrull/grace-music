@@ -194,8 +194,9 @@ The song packet page puts together the week's `YYYY-MM-DD_AM.pdf` for you. You p
 ### Turning it on (one time)
 
 1. Paste the new `Code.gs` into the Sheet's Apps Script and save.
-2. In the function dropdown, pick **setupSongPackets** and click **Run**. Google asks for two new permissions: seeing and adding files in your Drive, and connecting to an outside service (the Drive file list). Allow both. The Execution log then says how many PDFs it found in Song PDFs.
-3. Click **Deploy → Manage deployments**, the pencil icon, **New version**, then **Deploy**.
+2. In the left sidebar, click **+** next to **Services**, pick **Drive API** (leave the version on v3), and click **Add**.
+3. In the function dropdown, pick **setupSongPackets** and click **Run**. Google asks to let the script see and add files in your Drive. Allow it. The Execution log then says how many PDFs it found in Song PDFs.
+4. Click **Deploy → Manage deployments**, the pencil icon, **New version**, then **Deploy**.
 
 ### Each week
 
