@@ -71,7 +71,13 @@ function setupEmailHelper() {
 function builderLink() {
   const url = ScriptApp.getService().getUrl();
   if (!url) throw new Error('Deploy this project as a web app first (Deploy → New deployment → Web app).');
-  console.log('Builder link: ' + url + '?key=' + PropertiesService.getScriptProperties().getProperty(KEY_PROP));
+  const key = '?key=' + PropertiesService.getScriptProperties().getProperty(KEY_PROP);
+  if (/\/dev$/.test(url)) {
+    // From the editor Google sometimes reports the owner-only test address.
+    console.log('Copy the Web app URL (ending in /exec) from Deploy → Manage deployments and add ' + key + ' to the end.');
+  } else {
+    console.log('Builder link: ' + url + key);
+  }
 }
 
 /** Run any time to make this week's drafts right now (replacing ones already made for this Sunday). */
