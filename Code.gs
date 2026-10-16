@@ -35,6 +35,12 @@
  * four sections (Hymns by number, Modern Songs A-Z, Christmas, Removed) and
  * runs when a Category or Removed cell changes. updateSongList runs every
  * night once setupSongList has been run.
+ *
+ * The song packet page (packet.html) uses doPost with the same code to read
+ * the Song PDFs folder in Drive (every subfolder), send it one PDF at a time,
+ * keep a PDF uploaded from the page (in Song PDFs / Added from the packet
+ * page), and save the finished packet as "2026-11-01_AM.pdf" in that month's
+ * Orders of Service folder. It remembers which PDF was picked for each song.
  */
 
 const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];  // repeat every month
@@ -64,6 +70,18 @@ const SONG_HEADINGS = ['Hymns', 'Modern Songs', 'Christmas', 'Removed'];
 const NEW_SONGS_LABEL = 'Add new songs below this line';
 const NEW_SONG_ROWS = 5;
 const CANCELLED_NOTE = /cancel|^\s*no\b.*\bservice/i;
+
+// Song packets (packet.html)
+const SONG_PDFS_FOLDER = '0B_yrCm_KORazSnUtd0Qza1JBOE0';  // Drive: Song PDFs; every subfolder is read
+const ORDERS_FOLDER = '0B_yrCm_KORazWDBYMUdXX1RrT1E';     // Drive: Orders of Service, with 2026 / 11_November folders
+const UPLOADS_FOLDER = 'Added from the packet page';      // inside Song PDFs
+const PACKET_SUFFIX = { 'Sunday AM': 'AM', 'Sunday PM': 'PM', 'Wednesday': 'Wed' };
+const PDF_INDEX_KEY = 'pdfIndex';                          // the folder listing, kept in the script cache
+const PDF_INDEX_SECONDS = 6 * 60 * 60;
+const MAX_PDF_BYTES = 15 * 1024 * 1024;                    // the whole-hymnal PDFs are left out
+const MAX_PACKET_BYTES = 40 * 1024 * 1024;
+const PACKET_DAYS_KEPT = 120;                              // what was in each packet, for reopening it
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 /** GET: upcoming services, oldest first. With ?orders=1, the saved orders of service instead. */
 function doGet(e) {
@@ -189,6 +207,10 @@ function doPost(e) {
   try {
     if (body && body.action === 'saveOrder') return json_(saveOrder_(body));
     if (body && body.action === 'setNote') return json_(setServiceNote_(body));
+    if (body && body.action === 'packetSetup') return json_(packetSetup_(body));
+    if (body && body.action === 'pdfFile') return json_(pdfFile_(body));
+    if (body && body.action === 'uploadPdf') return json_(uploadPdf_(body));
+    if (body && body.action === 'savePacket') return json_(savePacket_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -488,6 +510,238 @@ function setupOrderCode() {
     props.setProperty('ORDER_CODE', code);
   }
   console.log('Order of service code: ' + code);
+}
+
+// ---------- Song packets ----------
+
+/**
+ * POST {action: 'packetSetup', code, date, service, refresh}: everything the
+ * packet page needs for one service: the PDFs in Song PDFs, the Songs tab (for
+ * other names), the PDF last picked for each song, what was in this packet the
+ * last time it was saved, and whether its file is already in Drive.
+ */
+function packetSetup_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const date = packetDate_(body.date);
+  const service = packetService_(body.service);
+  const props = PropertiesService.getScriptProperties().getProperties();
+  const picks = {};
+  Object.keys(props).forEach((k) => { if (k.indexOf('pick|') === 0) picks[k.slice(5)] = props[k]; });
+  const saved = props['packet|' + date + '|' + service];
+  const name = packetName_(date, service);
+  const folder = monthFolder_(date, false);
+  const existing = folder ? newestFile_(folder, name) : null;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SONGS_SHEET);
+  const songs = sheet ? readSongs_(sheet).map((s) => ({ num: s.num, title: s.title, other: s.other, id: s.id })) : [];
+  return {
+    status: 'ok', name: name, files: pdfIndex_(!!body.refresh), songs: songs, picks: picks,
+    packet: saved ? JSON.parse(saved) : null,
+    existing: existing ? { url: existing.getUrl(), updated: existing.getLastUpdated().toISOString() } : null,
+  };
+}
+
+/** POST {action: 'pdfFile', code, id}: one PDF from Song PDFs, as base64. */
+function pdfFile_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const id = String(body.id || '');
+  let entry = pdfIndex_(false).filter((f) => f.id === id)[0];
+  if (!entry) entry = pdfIndex_(true).filter((f) => f.id === id)[0];
+  if (!entry) throw new Error('That PDF isn’t in the Song PDFs folder anymore. Click Re-read Drive and try again.');
+  const bytes = DriveApp.getFileById(id).getBlob().getBytes();
+  return { status: 'ok', id: id, data: Utilities.base64Encode(bytes) };
+}
+
+/**
+ * POST {action: 'uploadPdf', code, name, data}: keeps a PDF chosen from the
+ * computer in Song PDFs / Added from the packet page, so it's there next time.
+ */
+function uploadPdf_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const bytes = pdfBytes_(body.data, MAX_PDF_BYTES);
+  let name = String(body.name || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').replace(/^[.\s]+/, '').trim().slice(0, 120) || 'Song';
+  if (!/\.pdf$/i.test(name)) name += '.pdf';
+  const songFolder = DriveApp.getFolderById(SONG_PDFS_FOLDER);
+  const found = songFolder.getFoldersByName(UPLOADS_FOLDER);
+  const folder = found.hasNext() ? found.next() : songFolder.createFolder(UPLOADS_FOLDER);
+  const file = folder.createFile(Utilities.newBlob(bytes, 'application/pdf', name));
+  const entry = { id: file.getId(), name: name, folder: UPLOADS_FOLDER, size: bytes.length,
+    modified: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd') };
+  const files = pdfIndex_(false);
+  files.push(entry);
+  cacheIndex_(files);
+  return { status: 'ok', file: entry };
+}
+
+/**
+ * POST {action: 'savePacket', code, date, service, data, picks, packet}: puts
+ * the combined PDF in Orders of Service / 2026 / 11_November as
+ * "2026-11-01_AM.pdf". An older file with that name goes to the Drive trash.
+ * picks is {song key: file id}, remembered for the next time each song comes
+ * up; packet is the page's list, kept so the packet reopens the same way.
+ */
+function savePacket_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const date = packetDate_(body.date);
+  const service = packetService_(body.service);
+  const bytes = pdfBytes_(body.data, MAX_PACKET_BYTES);
+  const name = packetName_(date, service);
+  const packet = JSON.stringify(body.packet || null);
+  if (packet.length > 8000) throw new Error('That packet has too many songs to remember. It wasn’t saved.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const folder = monthFolder_(date, true);
+    const old = folder.getFilesByName(name);
+    let replaced = 0;
+    while (old.hasNext()) { old.next().setTrashed(true); replaced++; }
+    const file = folder.createFile(Utilities.newBlob(bytes, 'application/pdf', name));
+
+    const props = PropertiesService.getScriptProperties();
+    const keep = {};
+    const picks = body.picks || {};
+    Object.keys(picks).slice(0, 40).forEach((k) => {
+      const id = String(picks[k] || '');
+      if (k.length <= 100 && /^[\w-]{10,80}$/.test(id)) keep['pick|' + k] = id;
+    });
+    keep['packet|' + date + '|' + service] = packet;
+    props.setProperties(keep);
+    prunePackets_(props);
+    return { status: 'ok', name: name, url: file.getUrl(), replaced: replaced };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function packetDate_(value) {
+  const date = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('That date doesn’t look right. Reload the page and try again.');
+  return date;
+}
+
+function packetService_(value) {
+  const service = String(value || '').trim();
+  if (!/^[A-Za-z0-9 '&-]{1,40}$/.test(service)) throw new Error('That service doesn’t look right. Reload the page and try again.');
+  return service;
+}
+
+/** "2026-11-01_AM.pdf", "2026-11-04_Wed.pdf", "2026-12-24_Christmas Eve.pdf" */
+function packetName_(date, service) {
+  return date + '_' + (PACKET_SUFFIX[service] || service) + '.pdf';
+}
+
+function pdfBytes_(data, max) {
+  const bytes = Utilities.base64Decode(String(data || ''));
+  if (bytes.length < 5 || String.fromCharCode.apply(null, bytes.slice(0, 5)) !== '%PDF-') throw new Error('That file isn’t a PDF.');
+  if (bytes.length > max) throw new Error('That PDF is too big (over ' + Math.round(max / 1048576) + ' MB).');
+  return bytes;
+}
+
+/** Orders of Service / 2026 / 11_November, made if create is true; otherwise null if it isn't there. */
+function monthFolder_(date, create) {
+  const m = Number(date.slice(5, 7));
+  const names = [date.slice(0, 4), String(m).padStart(2, '0') + '_' + MONTH_NAMES[m - 1]];
+  let folder = DriveApp.getFolderById(ORDERS_FOLDER);
+  for (let i = 0; i < names.length; i++) {
+    const found = folder.getFoldersByName(names[i]);
+    if (found.hasNext()) folder = found.next();
+    else if (create) folder = folder.createFolder(names[i]);
+    else return null;
+  }
+  return folder;
+}
+
+function newestFile_(folder, name) {
+  const files = folder.getFilesByName(name);
+  let best = null;
+  while (files.hasNext()) {
+    const f = files.next();
+    if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
+  }
+  return best;
+}
+
+/**
+ * Every PDF in Song PDFs and its subfolders: {id, name, folder, size, modified}.
+ * Reading Drive takes a few seconds, so the list is cached for six hours;
+ * refresh reads it again (the page's Re-read Drive button).
+ */
+function pdfIndex_(refresh) {
+  const cache = CacheService.getScriptCache();
+  if (!refresh) {
+    const n = Number(cache.get(PDF_INDEX_KEY) || 0);
+    const keys = [];
+    for (let i = 0; i < n; i++) keys.push(PDF_INDEX_KEY + i);
+    const parts = n ? cache.getAll(keys) : {};
+    if (n && keys.every((k) => k in parts)) return JSON.parse(keys.map((k) => parts[k]).join(''));
+  }
+  const files = [];
+  const walk = (folderId, path, depth) => {
+    driveChildren_(folderId).forEach((f) => {
+      if (f.mimeType === 'application/vnd.google-apps.folder') {
+        if (depth < 6) walk(f.id, path ? path + ' / ' + f.name : f.name, depth + 1);
+      } else if (f.mimeType === 'application/pdf' && Number(f.size || 0) <= MAX_PDF_BYTES) {
+        files.push({ id: f.id, name: f.name, folder: path, size: Number(f.size || 0), modified: String(f.modifiedTime || '').slice(0, 10) });
+      }
+    });
+  };
+  walk(SONG_PDFS_FOLDER, '', 0);
+  cacheIndex_(files);
+  return files;
+}
+
+function cacheIndex_(files) {
+  const json = JSON.stringify(files);
+  const size = 50000;   // a cache value can hold 100 KB
+  const parts = {};
+  let n = 0;
+  for (let i = 0; i < json.length; i += size) parts[PDF_INDEX_KEY + n++] = json.slice(i, i + size);
+  parts[PDF_INDEX_KEY] = String(n);
+  CacheService.getScriptCache().putAll(parts, PDF_INDEX_SECONDS);
+}
+
+/** One folder's files and folders, from the Drive API (one request per 1,000 instead of one per file). */
+function driveChildren_(folderId) {
+  const out = [];
+  let page = '';
+  do {
+    const params = {
+      q: "'" + folderId + "' in parents and trashed = false",
+      fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime)',
+      pageSize: '1000',
+    };
+    if (page) params.pageToken = page;
+    const url = 'https://www.googleapis.com/drive/v3/files?' +
+      Object.keys(params).map((k) => k + '=' + encodeURIComponent(params[k])).join('&');
+    const res = JSON.parse(UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } }).getContentText());
+    (res.files || []).forEach((f) => out.push(f));
+    page = res.nextPageToken || '';
+  } while (page);
+  return out;
+}
+
+/** Forgets what was in packets more than PACKET_DAYS_KEPT days old. */
+function prunePackets_(props) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - PACKET_DAYS_KEPT);
+  const before = Utilities.formatDate(cutoff, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  props.getKeys().forEach((k) => {
+    const m = /^packet\|(\d{4}-\d{2}-\d{2})\|/.exec(k);
+    if (m && m[1] < before) props.deleteProperty(k);
+  });
+}
+
+/**
+ * Run once from the editor after pasting this code: Google asks to let the
+ * script read and add files in Drive, then it lists the Song PDFs folder.
+ */
+function setupSongPackets() {
+  const files = pdfIndex_(true);
+  console.log('Song PDFs: ' + files.length + ' PDFs found. Now deploy a new version (Deploy > Manage deployments > Edit > New version).');
 }
 
 // ---------- Sheet menu ----------

@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Song Packet</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --brand: #7BAE58;
+    --brand-deep: #233617;
+    --brand-mid: #4E7A35;
+    --bg: #F3F8EF;
+    --card: #FFFFFF;
+    --ink: #1E2A16;
+    --muted: #5B6A50;
+    --line: #DCE7D3;
+    --tint: #EFF6EA;
+    --tint-line: #C6DBB6;
+    --danger: #B3261E;
+    --warn-bg: #FFF2CC;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 'Poppins', system-ui, sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+  a { color: var(--brand-mid); }
+
+  /* ---------- Top bar ---------- */
+  .bar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+    padding: 10px 18px;
+    background: var(--brand-deep); color: #fff;
+  }
+  .bar h1 { margin: 0 8px 0 0; font-size: 16px; font-weight: 600; }
+  .bar input[type=date] { min-height: 36px; border-radius: 8px; border: 0; padding: 0 10px; color: var(--ink); }
+  .bar select { min-height: 36px; border-radius: 8px; border: 0; padding: 0 10px; color: var(--ink); min-width: 260px; max-width: 100%; }
+  .bar .spacer { flex: 1; }
+  .bar .status { font-size: 13px; color: #CFE3C0; }
+  .bar a.link { color: #CFE3C0; font-size: 13px; }
+  .btn { min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--tint-line); background: var(--card); color: var(--ink); font-weight: 500; }
+  .btn.primary { background: var(--brand); border-color: var(--brand); color: #10160C; }
+  .btn.small { min-height: 30px; padding: 0 10px; font-size: 13px; }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .bar .btn { border-color: transparent; }
+
+  /* ---------- Layout ---------- */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; padding: 18px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; padding: 12px 16px; } }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 16px; overflow: hidden; }
+  .panel-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; background: var(--tint); border-bottom: 1px solid var(--line); }
+  .panel-head h2 { margin: 0; font-size: 15px; font-weight: 600; flex: 1; min-width: 160px; }
+  .panel-head .slot { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .panel-head .num { display: inline-block; min-width: 1.9em; padding: 0 .3em; margin-right: .35em; border: 1px solid var(--muted); border-radius: 4px; font-size: 12px; text-align: center; font-weight: 600; }
+  .panel-head .vv { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: .3em; }
+  .panel-head input.title { flex: 1; min-width: 180px; height: 32px; border: 1px solid var(--line); border-radius: 7px; padding: 0 8px; font-weight: 600; }
+  .panel-body { padding: 12px 14px 14px; }
+  .panel.skipped .panel-body { display: none; }
+  .panel.skipped .panel-head { background: #F1F1EE; }
+  .panel.skipped h2 { color: var(--muted); text-decoration: line-through; }
+  .skip { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+  .icon { width: 30px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--muted); font-size: 13px; line-height: 1; }
+  .icon:hover { border-color: var(--tint-line); color: var(--ink); }
+  .msg { margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); font-size: 13px; }
+  .msg.error { background: #FCE4E4; color: var(--danger); }
+  .msg.ok { background: var(--tint); border: 1px solid var(--tint-line); }
+  .none { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+
+  /* ---------- PDF choices ---------- */
+  .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .choice { position: relative; display: flex; flex-direction: column; border: 2px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; }
+  .choice.chosen { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(123, 174, 88, .25); }
+  .thumb { display: block; width: 100%; aspect-ratio: 8.5 / 11; padding: 0; border: 0; border-bottom: 1px solid var(--line); background: #f6f7f4; overflow: hidden; cursor: zoom-in; }
+  .thumb img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: top; background: #fff; }
+  .thumb .wait { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 12px; color: var(--muted); padding: 8px; text-align: center; }
+  .choice .meta { padding: 6px 8px 8px; font-size: 12px; line-height: 1.3; min-height: 3.6em; }
+  .choice .meta b { display: block; font-weight: 600; word-break: break-word; }
+  .choice .meta span { color: var(--muted); }
+  .check { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--tint-line); background: rgba(255,255,255,.95); color: transparent; font-size: 18px; font-weight: 700; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .check:hover { border-color: var(--brand); color: var(--tint-line); }
+  .choice.chosen .check { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .more { margin: -4px 0 12px; }
+
+  .find { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .find input[type=search] { flex: 1; min-width: 200px; height: 34px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; }
+  .results { list-style: none; margin: 8px 0 0; padding: 0; }
+  .results li { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 8px; font-size: 13px; }
+  .results li:nth-child(odd) { background: var(--tint); }
+  .results li span { flex: 1; min-width: 0; }
+  .results li small { color: var(--muted); }
+  .add-extra { width: 100%; min-height: 44px; border: 2px dashed var(--tint-line); border-radius: 14px; background: transparent; color: var(--brand-mid); font-weight: 500; }
+
+  /* ---------- Summary ---------- */
+  .summary { position: sticky; top: 74px; }
+  .summary ol { margin: 0; padding: 0 0 0 1.4em; font-size: 13px; }
+  .summary li { margin-bottom: 6px; }
+  .summary li small { display: block; color: var(--muted); word-break: break-word; }
+  .summary li.missing { color: var(--danger); }
+  .summary .total { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 13px; }
+  .summary .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .hint { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+
+  /* ---------- Dialogs ---------- */
+  dialog { border: 0; border-radius: 14px; padding: 20px; width: min(360px, 92vw); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(16, 22, 12, .6); }
+  dialog h3 { margin: 0 0 6px; font-size: 16px; }
+  dialog p { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+  #codeDialog input { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font-size: 16px; letter-spacing: .15em; }
+  dialog .err { color: var(--danger); font-size: 13px; min-height: 18px; margin: 6px 0 0; }
+  dialog .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  #viewer { width: min(980px, 96vw); height: 94vh; max-height: 94vh; padding: 0; display: flex; flex-direction: column; background: #d9dfd5; }
+  #viewer:not([open]) { display: none; }
+  .v-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; background: var(--brand-deep); color: #fff; }
+  .v-head .v-title { flex: 1; min-width: 180px; font-size: 14px; line-height: 1.3; }
+  .v-head .v-title small { display: block; color: #CFE3C0; font-size: 12px; }
+  .v-head .btn { border-color: transparent; }
+  .v-head .btn.chosen { background: var(--brand); }
+  .v-pages { flex: 1; overflow: auto; padding: 14px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .v-pages canvas { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.2); max-width: 100%; height: auto; }
+  .v-pages .wait { color: var(--muted); padding: 40px; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>Song Packet</h1>
+    <select id="service" aria-label="Service"></select>
+    <input type="date" id="otherDate" aria-label="Date" hidden>
+    <span class="spacer"></span>
+    <span class="status" id="status"></span>
+    <a class="link" id="builderLink" href="builder.html">Order of service</a>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div id="notice"></div>
+      <div id="items"></div>
+      <button type="button" class="add-extra" id="addExtra" hidden>+ Add a song or reading</button>
+    </div>
+    <div class="summary">
+      <div class="panel">
+        <div class="panel-head"><h2>In the packet</h2></div>
+        <div class="panel-body">
+          <ol id="summaryList"></ol>
+          <p class="total" id="summaryTotal"></p>
+          <div class="btns">
+            <button type="button" class="btn primary" id="saveBtn" disabled>Save to Drive</button>
+            <button type="button" class="btn" id="downloadBtn" disabled>Download</button>
+          </div>
+          <p class="hint" id="saveHint"></p>
+          <p class="hint"><button type="button" class="btn small" id="refreshBtn">Re-read Drive</button> after adding PDFs to Song PDFs.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="codeDialog">
+    <form method="dialog" id="codeForm">
+      <h3>Enter your code</h3>
+      <p>Same code as the order of service builder. This computer remembers it.</p>
+      <input id="codeInput" inputmode="numeric" autocomplete="off" aria-label="Code">
+      <p class="err" id="codeErr"></p>
+      <div class="btns"><button type="button" class="btn" id="codeCancel">Cancel</button><button class="btn primary">OK</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="viewer" aria-label="PDF preview">
+    <div class="v-head">
+      <button type="button" class="btn small" id="vPrev" title="Previous option (←)">‹</button>
+      <div class="v-title" id="vTitle"></div>
+      <button type="button" class="btn small" id="vNext" title="Next option (→)">›</button>
+      <button type="button" class="btn small primary" id="vPick">Use this one</button>
+      <button type="button" class="btn small" id="vClose">Close</button>
+    </div>
+    <div class="v-pages" id="vPages"></div>
+  </dialog>
+
+<script>
+  // Same Apps Script web app as the volunteer page and the order of service builder.
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyN_FOd4twDKmMrDk5l3NqTmKRJrKhIC3kUgkuumCKGoxK_wlkFxZlWevtGUyPtSnPE8Q/exec';
+  const CODE_KEY = 'gbc-oos-code';          // shared with the builder
+  const DRAFT_PREFIX = 'gbc-oos-draft|';    // the builder's unsaved orders on this computer
+  const SERVICES = ['Sunday AM', 'Sunday PM', 'Wednesday'];
+  const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
+  const CUSTOM_KEY = /^(\d{4}-\d{2}-\d{2})\|Custom (Sunday AM|Sunday PM|Wednesday)$/;
+  const SONG_ROLE = /^(Song \d+|Closing)$/;
+  const SHOW_CHOICES = 6;     // more behind "Show n more"
+  const LOADS_AT_ONCE = 3;    // PDFs fetched from Drive at the same time
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const $ = (sel) => document.querySelector(sel);
+  let services = [];
+  let saved = { orders: {} };
+  let setup = null;           // packetSetup reply: files, songs, picks, packet, name, existing
+  let byId = new Map();       // file id -> {id, name, folder, size, modified}
+  let items = [];             // [{ uid, extra, slot, title, num, verses, songKey, names, options, chosen, skip, showAll }]
+  let current = null;         // { date, service }
+  let uid = 0;
+  let busy = false;           // building or saving the packet
+  const bytesOf = new Map();  // file id -> Promise<Uint8Array>
+  const looks = new Map();    // file id -> { thumb, pages } | { error }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function store(fn) { try { return fn(window.localStorage); } catch (e) { return null; } }
+  function parseDate(key) { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); }
+  const fmt = (key, opts) => parseDate(key).toLocaleDateString('en-US', opts);
+  const dateKey = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+  const fileTitle = (f) => f.name.replace(/\.pdf$/i, '');
+  const setStatus = (t) => { $('#status').textContent = t || ''; };
+
+  // ---------- Talking to the Sheet's script ----------
+  function askCode(message) {
+    return new Promise((resolve) => {
+      const d = $('#codeDialog');
+      $('#codeErr').textContent = message || '';
+      $('#codeInput').value = '';
+      d.showModal();
+      $('#codeInput').focus();
+      $('#codeCancel').onclick = () => { d.close(); resolve(null); };
+      $('#codeForm').onsubmit = (e) => { e.preventDefault(); const v = $('#codeInput').value.trim(); d.close(); resolve(v || null); };
+    });
+  }
+
+  async function post(body) {
+    let res;
+    try {
+      const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
+      res = await r.json();
+    } catch (e) {
+      throw new Error('Couldn’t reach the Sheet. Check your connection and try again.');
+    }
+    if (res.status === 'error') throw new Error(res.message);
+    return res;
+  }
+
+  // One request at a time asks for the code; the others wait for it.
+  let asking = null;
+  async function withCode(action, fields) {
+    let message = '';
+    for (;;) {
+      let code = store((s) => s.getItem(CODE_KEY));
+      if (!code) {
+        if (!asking) asking = askCode(message).then((c) => { asking = null; if (c) store((s) => s.setItem(CODE_KEY, c)); return c; });
+        code = await asking;
+      }
+      if (!code) return null;
+      const res = await post(Object.assign({ action, code }, fields));
+      if (res.status === 'badcode') { store((s) => s.removeItem(CODE_KEY)); message = 'That code isn’t right. Try again.'; continue; }
+      return res;
+    }
+  }
+
+  // ---------- The songs on the order of service ----------
+  const roleValue = (svc, role) => ((svc && svc.items.find((it) => it.role === role)) || {}).value || '';
+
+  // "43 Rejoice the Lord Is King", "*New* I Set My Hope on Jesus"
+  function parseSong(textValue) {
+    let t = String(textValue || '').trim().replace(/^\*?\s*new\s*\*?\s*/i, '');
+    if (/^\d{1,4}$/.test(t)) return { num: t, title: '' };
+    const m = /^(\d{1,4})\.?\s+(.+)$/.exec(t);
+    return { num: m ? m[1] : '', title: (m ? m[2] : t).trim() };
+  }
+
+  // The builder's order for this service: a draft on this computer if it's newer, the saved one, or a custom sheet's.
+  function orderFor(date, service) {
+    let best = null;
+    [date + '|' + service, date + '|Custom ' + service].forEach((key) => {
+      const fromSheet = saved.orders[key];
+      const draft = JSON.parse(store((s) => s.getItem(DRAFT_PREFIX + key)) || 'null');
+      const pick = draft && (!fromSheet || (draft.at || 0) > (fromSheet.savedAt || 0))
+        ? { order: draft.order, at: draft.at || 0 } : fromSheet ? { order: fromSheet, at: fromSheet.savedAt || 0 } : null;
+      if (pick && (!best || pick.at > best.at)) best = pick;
+    });
+    return best && best.order;
+  }
+
+  // [{ slot, value, verses }] in service order: the order of service's songs, or the schedule's if there isn't one.
+  function songsFor(date, service) {
+    const svc = services.find((s) => s.date === date && s.service === service);
+    const order = orderFor(date, service);
+    if (order) {
+      return order.items.filter((it) => it.kind === 'song' && !it.hidden)
+        .map((it) => ({ slot: it.label || 'Song', value: it.value || (it.source ? roleValue(svc, it.source) : ''), verses: it.verses || '' }))
+        .filter((s) => s.value.trim());
+    }
+    return svc ? svc.items.filter((it) => SONG_ROLE.test(it.role) && it.value.trim())
+      .map((it) => ({ slot: it.role === 'Closing' ? 'Closing' : 'Hymn', value: it.value, verses: '' })) : [];
+  }
+
+  // ---------- Matching song titles to PDF names ----------
+  // "Come Christians Join To Sing_CCLI-G_4 Part.pdf" -> "come christians join sing"
+  const STOP = new Set(['the', 'a', 'an', 'o', 'oh', 'and', 'to', 'of']);
+  const norm = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/&/g, ' and ').replace(/['’]/g, '').replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+  const words = (t) => norm(t).split(' ').filter((w) => w && !STOP.has(w));
+  const pdfSongTitle = (name) => name.replace(/\.pdf$/i, '').split('_')[0].split(/\s+-\s+/)[0];
+
+  function score(nameWords, fileWords) {
+    if (!nameWords.length || !fileWords.length) return 0;
+    const a = nameWords.join(' '), b = fileWords.join(' ');
+    if (a === b) return 100;
+    const short = Math.min(nameWords.length, fileWords.length);
+    if (short >= 2 && (a.startsWith(b + ' ') || b.startsWith(a + ' '))) return 80;
+    const set = new Set(fileWords);
+    const shared = nameWords.filter((w) => set.has(w)).length;
+    const overlap = shared / Math.max(nameWords.length, fileWords.length);
+    return shared >= 2 && overlap >= 0.75 ? Math.round(70 * overlap) : 0;
+  }
+
+  // The PDFs for a song, best match first; the one picked last time comes first among equals.
+  function matchFiles(names, pickedId) {
+    const lists = names.map(words).filter((w) => w.length);
+    return setup.files.map((f) => {
+      if (!f.words) f.words = words(pdfSongTitle(f.name));
+      return { f, s: Math.max(0, ...lists.map((w) => score(w, f.words))) };
+    }).filter((x) => x.s > 0)
+      .sort((x, y) => y.s - x.s || (y.f.id === pickedId) - (x.f.id === pickedId) || String(y.f.modified).localeCompare(String(x.f.modified)))
+      .map((x) => x.f.id);
+  }
+
+  // The Songs tab row for a scheduled song, for its other names and its key ("#327", "M012").
+  function songRow(parsed) {
+    const t = norm(parsed.title);
+    const named = setup.songs.filter((s) => [s.title].concat(s.other ? s.other.split(/\s*;\s*/) : []).some((n) => norm(n) === t));
+    if (named.length) return named.find((s) => s.num === parsed.num) || named[0];
+    // By number only when the title is blank or close (a mistyped number shouldn't bring in another song).
+    const byNum = parsed.num ? setup.songs.find((s) => s.num === parsed.num) : null;
+    return byNum && (!t || score(words(parsed.title), words(byNum.title)) > 0) ? byNum : null;
+  }
+
+  function songItem(s) {
+    const parsed = parseSong(s.value);
+    const row = songRow(parsed);
+    const names = [...new Set([parsed.title].concat(row ? [row.title].concat(row.other ? row.other.split(/\s*;\s*/) : []) : []).filter(Boolean))];
+    if (!parsed.title && row) parsed.title = row.title;
+    const songKey = row ? row.id : 't:' + norm(parsed.title);
+    const remembered = byId.has(setup.picks[songKey]) ? setup.picks[songKey] : null;
+    const options = matchFiles(names, remembered);
+    if (remembered && !options.includes(remembered)) options.unshift(remembered);
+    return { uid: ++uid, extra: false, slot: s.slot, title: parsed.title, num: parsed.num || (row && row.num) || '', verses: s.verses,
+      songKey, names, options, chosen: remembered || (options.length === 1 ? options[0] : null), skip: false, showAll: false };
+  }
+
+  function extraItem(title, chosen) {
+    const options = title ? matchFiles([title]) : [];
+    if (chosen && byId.has(chosen) && !options.includes(chosen)) options.unshift(chosen);
+    return { uid: ++uid, extra: true, slot: 'Added', title: title || '', num: '', verses: '', songKey: '', names: [title],
+      options, chosen: chosen && byId.has(chosen) ? chosen : options.length === 1 ? options[0] : null, skip: false, showAll: false };
+  }
+
+  // Puts back what was in this packet the last time it was saved: picks, songs left out, and added items.
+  function restorePacket(list) {
+    const saved = setup.packet && setup.packet.items;
+    if (!saved) return list;
+    const out = list.slice();
+    saved.forEach((s, i) => {
+      if (s.extra) { out.splice(Math.min(i, out.length), 0, extraItem(s.title, s.file)); return; }
+      const it = out.find((x) => !x.extra && norm(x.title) === norm(s.title));
+      if (!it) return;
+      it.skip = !!s.skip;
+      if (s.file && byId.has(s.file)) { it.chosen = s.file; if (!it.options.includes(s.file)) it.options.unshift(s.file); }
+    });
+    return out;
+  }
+
+  // ---------- PDFs: download, thumbnail, preview ----------
+  let running = 0;
+  const waiting = [];
+  function queued(job) {
+    return new Promise((resolve, reject) => {
+      waiting.push(() => job().then(resolve, reject).finally(() => { running--; next(); }));
+      next();
+    });
+    function next() { while (running < LOADS_AT_ONCE && waiting.length) { running++; waiting.shift()(); } }
+  }
+
+  function fromBase64(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function toBase64(bytes) {
+    return new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',')[1]);
+      r.readAsDataURL(new Blob([bytes], { type: 'application/pdf' }));
+    });
+  }
+
+  function getBytes(id) {
+    if (!bytesOf.has(id)) {
+      const p = queued(() => withCode('pdfFile', { id })).then((res) => {
+        if (!res) throw new Error('No code entered.');
+        return fromBase64(res.data);
+      });
+      p.catch(() => bytesOf.delete(id));
+      bytesOf.set(id, p);
+    }
+    return bytesOf.get(id);
+  }
+  // pdf.js takes over the buffer it's given, so it always gets a copy.
+  const openPdf = (bytes) => pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+
+  async function renderPage(page, cssWidth, ratio) {
+    const base = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: (cssWidth * ratio) / base.width });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(vp.width);
+    canvas.height = Math.ceil(vp.height);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    return canvas;
+  }
+
+  // First-page picture and page count for a choice.
+  function look(id) {
+    if (looks.has(id)) return;
+    looks.set(id, null);
+    getBytes(id).then(openPdf).then(async (doc) => {
+      const canvas = await renderPage(await doc.getPage(1), 180, 2);
+      looks.set(id, { thumb: canvas.toDataURL('image/jpeg', 0.8), pages: doc.numPages });
+      doc.destroy();
+    }).catch((err) => looks.set(id, { error: err.message || 'Couldn’t open this PDF.' }))
+      .finally(() => { updateLook(id); renderSummary(); });
+  }
+
+  function thumbHtml(id) {
+    const l = looks.get(id);
+    if (l && l.thumb) return '<img src="' + l.thumb + '" alt="">';
+    return '<span class="wait">' + (l && l.error ? esc(l.error) : 'Loading…') + '</span>';
+  }
+  function metaHtml(id) {
+    const f = byId.get(id);
+    const l = looks.get(id);
+    const pages = l && l.pages ? ' · ' + plural(l.pages, 'page') : '';
+    return '<b>' + esc(fileTitle(f)) + '</b><span>' + esc(f.folder || 'Song PDFs') + pages + '</span>';
+  }
+  function updateLook(id) {
+    document.querySelectorAll('.choice[data-id="' + CSS.escape(id) + '"]').forEach((el) => {
+      el.querySelector('.thumb').innerHTML = thumbHtml(id);
+      el.querySelector('.meta').innerHTML = metaHtml(id);
+    });
+  }
+
+  // ---------- Rendering ----------
+  function itemHtml(it, i) {
+    const shownIds = it.showAll ? it.options : it.options.slice(0, SHOW_CHOICES);
+    if (it.chosen && !shownIds.includes(it.chosen)) shownIds.push(it.chosen);
+    const hiddenCount = it.options.length - shownIds.length;
+    const head = it.extra
+      ? '<span class="slot">Added</span><input class="title" data-act="title" value="' + esc(it.title) + '" placeholder="Name (Scripture reading, song, …)" aria-label="Name">'
+      : '<span class="slot">' + esc(it.slot) + '</span><h2>' + (it.num ? '<span class="num">' + esc(it.num) + '</span>' : '') + esc(it.title) +
+        (it.verses ? '<span class="vv">' + esc(it.verses) + '</span>' : '') + '</h2>';
+    const choices = shownIds.map((id) =>
+      '<div class="choice' + (it.chosen === id ? ' chosen' : '') + '" data-id="' + esc(id) + '">' +
+      '<button type="button" class="thumb" data-act="view" title="Look closer">' + thumbHtml(id) + '</button>' +
+      '<div class="meta">' + metaHtml(id) + '</div>' +
+      '<button type="button" class="check" data-act="pick" aria-pressed="' + (it.chosen === id) + '" title="' + (it.chosen === id ? 'Chosen (click to clear)' : 'Use this one') + '">✓</button></div>').join('');
+    return '<section class="panel' + (it.skip ? ' skipped' : '') + '" data-u="' + it.uid + '">' +
+      '<div class="panel-head">' + head +
+      '<button type="button" class="icon" data-act="up" title="Move up"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+      '<button type="button" class="icon" data-act="down" title="Move down"' + (i === items.length - 1 ? ' disabled' : '') + '>↓</button>' +
+      (it.extra ? '<button type="button" class="icon" data-act="remove" title="Remove">✕</button>'
+        : '<label class="skip"><input type="checkbox" data-act="skip"' + (it.skip ? ' checked' : '') + '> Leave out</label>') +
+      '</div><div class="panel-body">' +
+      (it.options.length ? '' : '<p class="none">' + (it.extra && !it.title ? 'Type a name above, or find or upload a PDF below.' : 'No PDF in Song PDFs matches this title. Find one below or upload it.') + '</p>') +
+      (shownIds.length ? '<div class="choices">' + choices + '</div>' : '') +
+      (hiddenCount > 0 ? '<button type="button" class="btn small more" data-act="more">Show ' + hiddenCount + ' more</button>' : '') +
+      '<div class="find"><input type="search" data-act="find" placeholder="Find another PDF in Song PDFs" aria-label="Find a PDF">' +
+      '<button type="button" class="btn small" data-act="upload">Upload a PDF…</button><input type="file" accept="application/pdf,.pdf" hidden></div>' +
+      '<ul class="results"></ul></div></section>';
+  }
+
+  function renderItems() {
+    $('#items').innerHTML = items.map(itemHtml).join('');
+    $('#addExtra').hidden = !setup;
+    items.forEach((it) => (it.showAll ? it.options : it.options.slice(0, SHOW_CHOICES)).concat(it.chosen ? [it.chosen] : []).forEach(look));
+    renderSummary();
+  }
+  function renderItem(it) {
+    const el = document.querySelector('[data-u="' + it.uid + '"]');
+    if (!el) return renderItems();
+    el.outerHTML = itemHtml(it, items.indexOf(it));
+    (it.showAll ? it.options : it.options.slice(0, SHOW_CHOICES)).forEach(look);
+    renderSummary();
+  }
+
+  function renderSummary() {
+    if (!setup) { $('#summaryList').innerHTML = ''; $('#summaryTotal').textContent = ''; return; }
+    const list = items.filter((it) => !it.skip && !(it.extra && !it.chosen));
+    let pages = 0, known = true;
+    $('#summaryList').innerHTML = list.map((it) => {
+      if (!it.chosen) return '<li class="missing">' + esc(it.title || 'Added item') + '<small>No PDF chosen</small></li>';
+      const l = looks.get(it.chosen);
+      if (l && l.pages) pages += l.pages; else known = false;
+      return '<li>' + esc(it.title || 'Added item') + '<small>' + esc(fileTitle(byId.get(it.chosen))) + (l && l.pages ? ' · ' + plural(l.pages, 'page') : '') + '</small></li>';
+    }).join('') || '<li class="missing">Nothing chosen yet</li>';
+    const chosen = list.filter((it) => it.chosen).length;
+    const missing = list.length - chosen;
+    $('#summaryTotal').innerHTML = '<b>' + esc(setup.name) + '</b><br>' + plural(chosen, 'PDF') + (chosen && known ? ', ' + plural(pages, 'page') : '') +
+      (missing ? ' · <span style="color:var(--danger)">' + missing + ' with no PDF</span>' : '');
+    $('#saveBtn').disabled = $('#downloadBtn').disabled = !chosen || busy;
+    $('#saveHint').innerHTML = setup.existing
+      ? 'Saving replaces the ' + esc(setup.name) + ' already in Drive (<a href="' + esc(setup.existing.url) + '" target="_blank" rel="noopener">open it</a>); the old one goes to the Drive trash.'
+      : 'Saves to Orders of Service › ' + esc(current.date.slice(0, 4)) + ' › ' + esc(monthFolder(current.date)) + ', where the weekly email finds it.';
+  }
+  const monthFolder = (date) => date.slice(5, 7) + '_' + fmt(date, { month: 'long' });
+
+  // ---------- Choosing a service ----------
+  function choicesList() {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const from = new Date(today); from.setDate(from.getDate() - 14);
+    const seen = new Map();
+    services.forEach((s) => seen.set(s.date + '|' + s.service, s));
+    Object.keys(saved.orders).forEach((k) => {
+      const m = CUSTOM_KEY.exec(k);
+      if (m && parseDate(m[1]) >= from && !seen.has(m[1] + '|' + m[2])) seen.set(m[1] + '|' + m[2], { date: m[1], service: m[2] });
+    });
+    const order = (s) => (SERVICES.indexOf(s) + 4) % 4;
+    return [...seen.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : order(a.service) - order(b.service)));
+  }
+
+  // Services in the schedule or with a saved order of service, plus "Another date" for a Sunday morning that has neither.
+  function renderChoices(asked) {
+    const list = choicesList();
+    const values = list.map((s) => s.date + '|' + s.service);
+    const other = asked && !values.includes(asked) && /^\d{4}-\d{2}-\d{2}\|/.test(asked) ? asked : '';
+    $('#service').innerHTML = list.map((s) => '<option value="' + esc(s.date + '|' + s.service) + '">' +
+      esc(fmt(s.date, { weekday: 'short', month: 'short', day: 'numeric' })) + ' · ' + esc(SERVICE_LABEL[s.service] || s.service) + '</option>').join('') +
+      '<option value="other">' + (other ? esc(fmt(other.split('|')[0], { weekday: 'short', month: 'short', day: 'numeric' })) + ' · Sunday Morning (not in the schedule)' : 'Another date…') + '</option>';
+    $('#otherDate').hidden = !other;
+    if (other) { $('#otherDate').value = other.split('|')[0]; $('#service').value = 'other'; return other; }
+    const today = dateKey(new Date());
+    const next = list.find((s) => s.date >= today && s.service === 'Sunday AM') || list.find((s) => s.date >= today) || list[0];
+    $('#service').value = values.includes(asked) ? asked : next ? next.date + '|' + next.service : 'other';
+    return $('#service').value;
+  }
+  // The coming Sunday (today, if it's Sunday).
+  function nextSunday() {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
+    return dateKey(d);
+  }
+
+  async function openService(value, refresh) {
+    if (!value || value === 'other') return openService(renderChoices(nextSunday() + '|Sunday AM'), refresh);
+    const [date, service] = value.split('|');
+    current = { date, service };
+    history.replaceState(null, '', '?date=' + date + (service === 'Sunday AM' ? '' : '&service=' + encodeURIComponent(service)));
+    setup = null;
+    items = [];
+    renderItems();
+    $('#notice').innerHTML = '<p class="msg ok">' + (refresh ? 'Reading the Song PDFs folder again…' : 'Getting the PDFs in Song PDFs…') + '</p>';
+    setStatus('Loading…');
+    let res;
+    try {
+      res = await withCode('packetSetup', { date, service, refresh: !!refresh });
+    } catch (err) {
+      $('#notice').innerHTML = '<p class="msg error">' + esc(err.message) + '</p>';
+      setStatus('');
+      return;
+    }
+    if (!res) {
+      $('#notice').innerHTML = '<p class="msg">The code is needed to read the Song PDFs folder. <button type="button" class="btn small" id="retry">Try again</button></p>';
+      $('#retry').onclick = () => openService(value);
+      setStatus('');
+      return;
+    }
+    if (current.date !== date || current.service !== service) return;   // another service was chosen meanwhile
+    setup = res;
+    byId = new Map(setup.files.map((f) => [f.id, f]));
+    items = restorePacket(songsFor(date, service).map(songItem));
+    $('#notice').innerHTML = items.some((it) => !it.extra) ? '' :
+      '<p class="msg">There are no songs for this service in the schedule or the order of service builder yet. Add them in the builder and reload, or add PDFs below with “Add a song or reading.”</p>';
+    setStatus(plural(setup.files.length, 'PDF') + ' in Song PDFs');
+    renderItems();
+  }
+
+  // ---------- Editing ----------
+  const itemOf = (el) => { const p = el.closest('[data-u]'); return p ? items.find((it) => it.uid === Number(p.dataset.u)) : null; };
+
+  function choose(it, id) {
+    it.chosen = it.chosen === id ? null : id;
+    if (it.chosen && !it.options.includes(id)) it.options.unshift(id);
+    renderItem(it);
+  }
+
+  $('#items').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const it = itemOf(btn);
+    if (!it) return;
+    const act = btn.dataset.act;
+    const i = items.indexOf(it);
+    if (act === 'pick') choose(it, btn.closest('.choice').dataset.id);
+    else if (act === 'view') view(it, btn.closest('.choice').dataset.id);
+    else if (act === 'more') { it.showAll = true; renderItem(it); }
+    else if (act === 'up' && i > 0) { items.splice(i - 1, 0, items.splice(i, 1)[0]); renderItems(); }
+    else if (act === 'down' && i < items.length - 1) { items.splice(i + 1, 0, items.splice(i, 1)[0]); renderItems(); }
+    else if (act === 'remove') { items.splice(i, 1); renderItems(); }
+    else if (act === 'upload') btn.parentNode.querySelector('input[type=file]').click();
+    else if (act === 'add') { choose(it, btn.dataset.id); }
+  });
+
+  $('#items').addEventListener('change', (e) => {
+    const it = itemOf(e.target);
+    if (!it) return;
+    if (e.target.dataset.act === 'skip') { it.skip = e.target.checked; renderItem(it); }
+    else if (e.target.dataset.act === 'title') {
+      it.title = e.target.value.trim();
+      const keep = it.options.filter((id) => id === it.chosen);
+      it.options = [...new Set(keep.concat(it.title ? matchFiles([it.title]) : []))];
+      if (!it.chosen && it.options.length === 1) it.chosen = it.options[0];
+      renderItem(it);
+    } else if (e.target.type === 'file' && e.target.files[0]) upload(it, e.target.files[0]);
+  });
+
+  // Search Song PDFs by every word typed, in the file name or its folder.
+  $('#items').addEventListener('input', (e) => {
+    if (e.target.dataset.act !== 'find') return;
+    const it = itemOf(e.target);
+    const q = norm(e.target.value).split(' ').filter(Boolean);
+    const box = e.target.closest('.panel-body').querySelector('.results');
+    if (!q.length) { box.innerHTML = ''; return; }
+    const hits = setup.files.filter((f) => { const h = norm(f.name + ' ' + f.folder); return q.every((w) => h.includes(w)); })
+      .sort((a, b) => (a.name < b.name ? -1 : 1)).slice(0, 12);
+    box.innerHTML = hits.map((f) => '<li><span>' + esc(fileTitle(f)) + ' <small>' + esc(f.folder || 'Song PDFs') + '</small></span>' +
+      (it.chosen === f.id ? '<small>Chosen</small>' : '<button type="button" class="btn small" data-act="add" data-id="' + esc(f.id) + '">Use</button>') + '</li>').join('') ||
+      '<li><span>Nothing in Song PDFs matches that.</span></li>';
+  });
+
+  async function upload(it, file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (String.fromCharCode(...bytes.slice(0, 5)) !== '%PDF-') { alert(file.name + ' isn’t a PDF.'); return; }
+    setStatus('Uploading ' + file.name + '…');
+    try {
+      const res = await withCode('uploadPdf', { name: file.name, data: await toBase64(bytes) });
+      if (!res) { setStatus(''); return; }
+      setup.files.push(res.file);
+      byId.set(res.file.id, res.file);
+      bytesOf.set(res.file.id, Promise.resolve(bytes));
+      if (it.extra && !it.title) it.title = pdfSongTitle(file.name);
+      it.chosen = null;
+      choose(it, res.file.id);
+      setStatus('Uploaded to Song PDFs › Added from the packet page');
+    } catch (err) {
+      setStatus('');
+      alert('The upload didn’t work: ' + err.message);
+    }
+  }
+
+  $('#addExtra').onclick = () => {
+    const it = extraItem('', null);
+    items.push(it);
+    renderItems();
+    const el = document.querySelector('[data-u="' + it.uid + '"] input.title');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus();
+  };
+
+  // ---------- Looking closer ----------
+  let viewing = null;   // { it, id }
+  let viewToken = 0;
+  async function view(it, id) {
+    viewing = { it, id };
+    const d = $('#viewer');
+    if (!d.open) d.showModal();
+    const list = it.options;
+    const n = list.indexOf(id);
+    const f = byId.get(id);
+    $('#vTitle').innerHTML = esc(it.title || 'Added item') + ' <small>' + esc(fileTitle(f)) + ' · ' + esc(f.folder || 'Song PDFs') +
+      (list.length > 1 ? ' · option ' + (n + 1) + ' of ' + list.length : '') + '</small>';
+    $('#vPrev').disabled = n <= 0;
+    $('#vNext').disabled = n >= list.length - 1;
+    $('#vPick').textContent = it.chosen === id ? '✓ Chosen' : 'Use this one';
+    $('#vPick').classList.toggle('chosen', it.chosen === id);
+    const pages = $('#vPages');
+    pages.innerHTML = '<div class="wait">Loading…</div>';
+    pages.scrollTop = 0;
+    const token = ++viewToken;
+    try {
+      const doc = await openPdf(await getBytes(id));
+      if (token !== viewToken) return doc.destroy();
+      pages.innerHTML = '';
+      const width = Math.min(860, pages.clientWidth - 28);
+      for (let p = 1; p <= doc.numPages; p++) {
+        const canvas = await renderPage(await doc.getPage(p), width, window.devicePixelRatio || 1);
+        if (token !== viewToken) break;
+        canvas.style.width = width + 'px';
+        pages.appendChild(canvas);
+      }
+      doc.destroy();
+    } catch (err) {
+      if (token === viewToken) pages.innerHTML = '<div class="wait">Couldn’t open this PDF: ' + esc(err.message) + '</div>';
+    }
+  }
+  function step(by) {
+    if (!viewing) return;
+    const list = viewing.it.options;
+    const n = list.indexOf(viewing.id) + by;
+    if (n >= 0 && n < list.length) {
+      if (!viewing.it.showAll && n >= SHOW_CHOICES) { viewing.it.showAll = true; renderItem(viewing.it); viewing.it = items.find((x) => x.uid === viewing.it.uid); }
+      view(viewing.it, list[n]);
+    }
+  }
+  $('#vPrev').onclick = () => step(-1);
+  $('#vNext').onclick = () => step(1);
+  $('#vClose').onclick = () => $('#viewer').close();
+  $('#vPick').onclick = () => {
+    const { it, id } = viewing;
+    if (it.chosen !== id) choose(it, id);
+    $('#viewer').close();
+  };
+  $('#viewer').addEventListener('close', () => { viewToken++; viewing = null; });
+  $('#viewer').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+  });
+
+  // ---------- Building the packet ----------
+  // Pages are copied as they are. A PDF that's locked against editing (some publishers do that)
+  // can't be copied, so its pages go in as pictures at 200 dpi instead.
+  async function buildPdf(list) {
+    const { PDFDocument } = PDFLib;
+    const out = await PDFDocument.create();
+    for (let i = 0; i < list.length; i++) {
+      setStatus('Combining ' + (i + 1) + ' of ' + list.length + '…');
+      const bytes = await getBytes(list[i].chosen);
+      let src = null;
+      try { src = await PDFDocument.load(bytes, { ignoreEncryption: true }); } catch (e) { src = null; }
+      if (src && !src.isEncrypted) {
+        const pages = await out.copyPages(src, src.getPageIndices());
+        pages.forEach((p) => out.addPage(p));
+      } else {
+        const doc = await openPdf(bytes);
+        for (let p = 1; p <= doc.numPages; p++) {
+          const page = await doc.getPage(p);
+          const size = page.getViewport({ scale: 1 });
+          const canvas = await renderPage(page, size.width, 200 / 72);
+          const jpg = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+          const img = await out.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
+          out.addPage([size.width, size.height]).drawImage(img, { x: 0, y: 0, width: size.width, height: size.height });
+        }
+        doc.destroy();
+      }
+    }
+    out.setTitle(setup.name.replace(/\.pdf$/, ''));
+    return out.save();
+  }
+
+  function readyList(action) {
+    const list = items.filter((it) => !it.skip && it.chosen);
+    const missing = items.filter((it) => !it.skip && !it.chosen && !(it.extra && !it.title));
+    if (missing.length && !confirm(missing.map((it) => it.title || 'Added item').join(', ') + (missing.length === 1 ? ' has' : ' have') +
+      ' no PDF chosen, so ' + (missing.length === 1 ? 'it' : 'they') + ' won’t be in the packet. ' + action + ' anyway?')) return null;
+    return list;
+  }
+
+  async function run(action, fn) {
+    const list = readyList(action);
+    if (!list || !list.length) return;
+    busy = true;
+    renderSummary();
+    try {
+      await fn(await buildPdf(list), list);
+    } catch (err) {
+      alert(err.message || String(err));
+      setStatus('');
+    } finally {
+      busy = false;
+      renderSummary();
+    }
+  }
+
+  $('#downloadBtn').onclick = () => run('Download', async (bytes) => {
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = setup.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    setStatus('Downloaded ' + setup.name);
+  });
+
+  $('#saveBtn').onclick = () => run('Save', async (bytes, list) => {
+    setStatus('Saving to Drive…');
+    const picks = {};
+    list.forEach((it) => { if (it.songKey) picks[it.songKey] = it.chosen; });
+    const packet = { items: items.map((it) => ({ title: it.title, extra: it.extra || undefined, skip: it.skip || undefined, file: it.chosen || undefined })) };
+    const res = await withCode('savePacket', { date: current.date, service: current.service, data: await toBase64(bytes), picks, packet });
+    if (!res) { setStatus(''); return; }
+    Object.assign(setup.picks, picks);
+    setup.packet = packet;
+    setup.existing = { url: res.url, updated: new Date().toISOString() };
+    setStatus('Saved ' + res.name);
+    $('#notice').innerHTML = '<p class="msg ok">Saved <b>' + esc(res.name) + '</b> to Orders of Service' + (res.replaced ? ' (the older copy is in the Drive trash)' : '') +
+      '. <a href="' + esc(res.url) + '" target="_blank" rel="noopener">Open it in Drive</a></p>';
+  });
+
+  $('#service').onchange = () => {
+    const v = $('#service').value;
+    if (v !== 'other') return openService(renderChoices(v));
+    openService(renderChoices(($('#otherDate').value || nextSunday()) + '|Sunday AM'));
+    $('#otherDate').focus();
+  };
+  $('#otherDate').onchange = () => { if ($('#otherDate').value) openService(renderChoices($('#otherDate').value + '|Sunday AM')); };
+  $('#refreshBtn').onclick = () => { if (current) openService(current.date + '|' + current.service, true); };
+
+  async function start() {
+    setStatus('Loading…');
+    try {
+      const [feed, orders] = await Promise.all([
+        fetch(API_URL, { cache: 'no-store' }).then((r) => r.json()),
+        fetch(API_URL + '?orders=1', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
+      if (feed.status === 'error') throw new Error(feed.message);
+      services = feed.services || [];
+      saved = { orders: orders.orders || {} };
+    } catch (err) {
+      $('#notice').innerHTML = '<p class="msg error">Couldn’t load the schedule: ' + esc(err.message) + '</p>';
+      setStatus('');
+      return;
+    }
+    const params = new URLSearchParams(location.search);
+    openService(renderChoices(params.get('date') && params.get('date') + '|' + (params.get('service') || 'Sunday AM')));
+  }
+  start();
+</script>
+</body>
+</html>

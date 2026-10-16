@@ -49,6 +49,7 @@
   .btn.small { min-height: 30px; padding: 0 10px; font-size: 13px; }
   .btn:disabled { opacity: .6; cursor: default; }
   .bar .btn { border-color: transparent; }
+  .bar a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 
   /* ---------- Layout ---------- */
   .layout { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(360px, 560px); gap: 18px; padding: 18px; align-items: start; }
@@ -202,6 +203,7 @@
     <button type="button" class="btn" id="saveBtn">Save</button>
     <button type="button" class="btn" id="pdfBtn" title="One copy at its own size, to email as an attachment">Save PDF</button>
     <button type="button" class="btn primary" id="printBtn">Print</button>
+    <a class="btn" id="packetLink" href="packet.html" title="Pick the song PDFs and combine them into one">Song packet</a>
   </div>
 
   <div class="layout">
@@ -910,6 +912,8 @@
     const anySaved = sheet.some((p) => saved.orders[p.key]);
     $('#status').className = 'status' + (dirty ? ' dirty' : '');
     $('#status').textContent = dirty ? 'Unsaved changes (kept on this computer)' : anySaved ? 'Saved' : 'Not saved yet';
+    const svc = sheet.length && sheet[0].svc;
+    $('#packetLink').href = 'packet.html' + (svc ? '?date=' + svc.date + (svc.service === 'Sunday AM' ? '' : '&service=' + encodeURIComponent(svc.service)) : '');
   }
 
   function askCode(message) {

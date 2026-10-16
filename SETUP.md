@@ -186,3 +186,26 @@ A custom Sunday has a morning and an evening service, the same as a regular Sund
 Save works the same way. Saved custom sheets, and ones you've started on this computer, are listed by date in the same section of the list. If you change a saved custom sheet's date, the copy under the old date is removed the next time you save.
 
 Don't edit the Orders tab by hand; the builder reads and writes it.
+
+## Song packet
+
+The song packet page puts together the week's `YYYY-MM-DD_AM.pdf` for you. You pick which PDF to use for each song, and it combines them into one file in the right month folder. Open it from the **Song packet** button in the builder, or go to <https://davidluttrull.github.io/grace-music/packet.html>. It uses the same code as the builder.
+
+### Turning it on (one time)
+
+1. Paste the new `Code.gs` into the Sheet's Apps Script and save.
+2. In the function dropdown, pick **setupSongPackets** and click **Run**. Google asks for two new permissions: seeing and adding files in your Drive, and connecting to an outside service (the Drive file list). Allow both. The Execution log then says how many PDFs it found in Song PDFs.
+3. Click **Deploy → Manage deployments**, the pencil icon, **New version**, then **Deploy**.
+
+### Each week
+
+1. Pick the service at the top. It starts on the coming Sunday morning. For a Sunday that isn't in the Sheet or the builder yet, pick **Another date…** at the bottom of the list.
+2. Each song in that Sunday's order of service gets a row of choices: every PDF in Song PDFs (all its folders) whose name matches the song's title. If there's no order of service yet, the songs come from the Sheet. Each choice shows its first page, its folder, and how many pages it has.
+3. Click a first page to see the whole PDF up close. **‹** and **›** (or the arrow keys) step through that song's choices, and **Use this one** picks it. You can also click the round check on a choice. The page remembers your pick for each song, so the next time that song comes up, the same PDF is already checked. A song with only one PDF is checked for you.
+4. If the PDF you want isn't shown, type in **Find another PDF in Song PDFs** to search every file name, or click **Upload a PDF…** to use one from your computer. Uploaded PDFs are kept in Song PDFs → **Added from the packet page**, so they turn up next time. Move them into the right folder whenever you like.
+5. **+ Add a song or reading** at the bottom adds something that isn't in the order of service, like a Scripture reading. Type its name to find matching PDFs, or search or upload as above. ↑ and ↓ move any item, and **Leave out** skips a song.
+6. **Save to Drive** combines everything, in the order shown, into `YYYY-MM-DD_AM.pdf` in Orders of Service → 2026 → that month's folder, which is where the weekly email looks for it. If that file is already there, the old copy goes to the Drive trash. **Download** saves the same PDF to your computer.
+
+Reopening the same Sunday later shows what you saved: your picks, added items, and songs left out. If you add PDFs to Song PDFs while the page is open, click **Re-read Drive**. Otherwise the page checks Drive for new files every six hours.
+
+A few publishers lock their PDFs against changes. The page can't copy those pages directly, so it puts them in as high-quality pictures instead. They print the same, but you can't select their text.
