@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Leader Guide</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand: #7BAE58;
+    --brand-deep: #233617;
+    --brand-mid: #4E7A35;
+    --bg: #F3F8EF;
+    --card: #FFFFFF;
+    --ink: #1E2A16;
+    --muted: #5B6A50;
+    --line: #DCE7D3;
+    --tint: #EFF6EA;
+    --tint-line: #C6DBB6;
+    --warn-bg: #FFF2CC;
+    --warn-ink: #4A3500;
+    --code-bg: #EEF2EA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --brand-deep: #10160C;
+      --brand-mid: #9CCB7A;
+      --bg: #10160C;
+      --card: #1A2414;
+      --ink: #E8F0E1;
+      --muted: #A3B396;
+      --line: #2D3B24;
+      --tint: #243319;
+      --tint-line: #3A4D2C;
+      --warn-bg: #4A3B12;
+      --warn-ink: #FFE7A3;
+      --code-bg: #243319;
+    }
+  }
+  :root[data-theme="dark"] {
+    --brand-deep: #10160C;
+    --brand-mid: #9CCB7A;
+    --bg: #10160C;
+    --card: #1A2414;
+    --ink: #E8F0E1;
+    --muted: #A3B396;
+    --line: #2D3B24;
+    --tint: #243319;
+    --tint-line: #3A4D2C;
+    --warn-bg: #4A3B12;
+    --warn-ink: #FFE7A3;
+    --code-bg: #243319;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 Poppins, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  [hidden] { display: none !important; }
+  a { color: var(--brand-mid); overflow-wrap: anywhere; }
+  b { font-weight: 600; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+
+  header.top { background: #233617; color: #fff; padding: 24px 16px 0; }
+  header.top .wrap { padding: 0; }
+  header.top h1 { margin: 0 0 2px; font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+  header.top p { margin: 0 0 16px; color: #C6DBB6; font-size: 14px; }
+  .tabs { display: flex; gap: 6px; }
+  .tab { border: 0; border-radius: 10px 10px 0 0; padding: 10px 18px; background: rgba(255,255,255,.12); color: #DCEBD0; font: 600 14px Poppins, system-ui, sans-serif; cursor: pointer; }
+  .tab[aria-selected="true"] { background: var(--bg); color: var(--ink); }
+
+  .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 18px; padding: 20px 0 40px; align-items: start; }
+  @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } .steps { display: none; } }
+
+  .steps { list-style: none; margin: 0; padding: 0; position: sticky; top: 12px; }
+  .steps button { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 7px 8px; border-radius: 9px; font: 500 13.5px/1.3 Poppins, system-ui, sans-serif; color: var(--muted); cursor: pointer; }
+  .steps button:hover { background: var(--tint); color: var(--ink); }
+  .steps .n { flex: 0 0 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--tint-line); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+  .steps button.done .n { background: var(--tint); border-color: var(--brand); color: var(--brand-mid); }
+  .steps button.current { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+  .steps button.current .n { background: var(--brand); border-color: var(--brand); color: #10160C; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px 18px; }
+  @media (max-width: 560px) { .card { padding: 18px 16px 14px; } }
+  .progress { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--tint); overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--brand); transition: width .2s; }
+  .step h2 { margin: 0 0 4px; font-size: 21px; color: var(--brand-mid); }
+  .when { display: inline-block; margin: 0 0 14px; padding: 2px 10px; border-radius: 999px; background: var(--tint); color: var(--muted); font-size: 12.5px; font-weight: 500; }
+  .step p { margin: 0 0 12px; }
+  .step ul, .step ol { margin: 0 0 14px; padding-left: 22px; }
+  .step li { margin: 5px 0; }
+  .go { display: inline-flex; align-items: center; gap: 6px; margin: 2px 8px 14px 0; padding: 9px 16px; border-radius: 9px; background: var(--brand); color: #10160C; font-weight: 600; text-decoration: none; }
+  .go.alt { background: var(--card); color: var(--ink); border: 1px solid var(--tint-line); }
+  .tip { border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: 14px; background: var(--tint); }
+  .heads { border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; font-size: 14px; background: var(--warn-bg); color: var(--warn-ink); }
+  .ui { display: inline-block; padding: 0 7px; border: 1px solid var(--tint-line); border-radius: 6px; background: var(--card); font-size: 13px; font-weight: 600; white-space: nowrap; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; background: var(--code-bg); border-radius: 5px; padding: 1px 5px; overflow-wrap: anywhere; }
+  .swatches { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0 0 14px; font-size: 14px; align-items: center; }
+  .sw { width: 42px; height: 18px; border-radius: 4px; border: 1px solid var(--line); }
+
+  .nav { display: flex; gap: 10px; justify-content: space-between; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .nav button { min-height: 40px; padding: 0 18px; border-radius: 9px; border: 1px solid var(--tint-line); background: var(--card); color: var(--ink); font: 600 14px Poppins, system-ui, sans-serif; cursor: pointer; }
+  .nav button.next { background: var(--brand); border-color: var(--brand); color: #10160C; }
+  .nav button:disabled { opacity: .45; cursor: default; }
+  footer { color: var(--muted); font-size: 13px; padding: 0 0 40px; }
+
+  @media print {
+    body { background: #fff; color: #000; font-size: 11pt; }
+    header.top { background: #fff; color: #000; padding: 0 0 8pt; border-bottom: 2pt solid #000; }
+    header.top p { color: #333; }
+    .tabs, .steps, .progress, .nav, footer { display: none !important; }
+    .layout { display: block; padding: 0; }
+    .card { border: 0; padding: 0; }
+    .step[hidden] { display: block !important; }
+    .step { break-inside: avoid; margin-bottom: 14pt; }
+    .go { background: none; color: #000; padding: 0; border: 0; text-decoration: underline; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>Music Leader Guide</h1>
+    <p>Grace Baptist Church &middot; step by step</p>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-sunday" aria-controls="panel" data-tab="sunday">Prepare a Sunday</button>
+      <button class="tab" role="tab" id="tab-months" aria-controls="panel" data-tab="months">Plan two months</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="layout">
+    <ol class="steps" id="stepList" aria-label="Steps"></ol>
+    <div class="card" id="panel" role="tabpanel">
+      <div class="progress"><span id="count"></span><div class="bar"><span id="fill"></span></div></div>
+      <div id="stepBox"></div>
+      <div class="nav">
+        <button type="button" id="back">&larr; Back</button>
+        <button type="button" class="next" id="next">Next &rarr;</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ===================== PREPARE A SUNDAY ===================== -->
+<template id="sunday">
+  <section class="step" data-title="Before you start">
+    <h2>Before you start</h2>
+    <span class="when">Once per computer</span>
+    <ul>
+      <li>Use <b>Chrome on a computer</b>. These pages aren't made for phones.</li>
+      <li>Get the <b>order of service code</b> from David Luttrull. The pages ask for it the first time you save on a computer, then remember it. Please don't share it.</li>
+      <li>To save PDFs in Drive, you need edit access to the <b>Orders of Service</b> folder. David can share it with you.</li>
+    </ul>
+    <p>Everything you'll use:</p>
+    <a class="go" href="https://gracetoanderson.com/musicorder" target="_blank" rel="noopener">Order of service builder</a>
+    <a class="go alt" href="https://davidluttrull.github.io/grace-music/packet.html" target="_blank" rel="noopener">Song packet</a>
+    <a class="go alt" href="https://gracetoanderson.com/musicschedule" target="_blank" rel="noopener">Volunteer schedule</a>
+    <div class="tip"><b>The week at a glance:</b> by <b>Thursday noon</b>, save the order of service, its PDF, and the song packet. The team email goes out Thursday afternoon, and you print the bulletin inserts before Sunday.</div>
+  </section>
+
+  <section class="step" data-title="Open the Sunday">
+    <h2>Open the Sunday in the builder</h2>
+    <span class="when">Early in the week</span>
+    <a class="go" href="https://gracetoanderson.com/musicorder" target="_blank" rel="noopener">Open the builder</a>
+    <ol>
+      <li>Pick the Sunday in the date list at the top. One sheet holds the morning and evening services.</li>
+      <li>Leave the size on <span class="ui">3 per page</span>, unless you want a bigger <span class="ui">2 per page</span> sheet.</li>
+    </ol>
+    <div class="tip"><b>Sunday not in the list?</b> Scroll to the bottom of the date list and pick <span class="ui">New custom Sunday…</span>, then set its date in the box that appears. Nothing fills in from the schedule on a custom Sunday, so type the songs into each item and the people into the <b>Team</b> box at the bottom.</div>
+  </section>
+
+  <section class="step" data-title="Check songs and people">
+    <h2>Check the songs and people</h2>
+    <span class="when">Builder</span>
+    <p>The songs, prelude, offering, special, and team fill in from the schedule. They show in gray with a small <b>“from Song 1”</b> tag.</p>
+    <ul>
+      <li><b>Something changed?</b> Type over it. This changes only this sheet, not the schedule. Clear the box to go back to the schedule's value.</li>
+      <li><b>Verses:</b> type them in each hymn's <span class="ui">Verses</span> box, like <code>all 3</code> or <code>1, 3-4</code>.</li>
+      <li><b>Offering and Special:</b> put the song title in the <span class="ui">Detail</span> box. It prints in italics.</li>
+      <li>A song marked <code>*New*</code> prints with a NEW tag. Hymn numbers print in a small box.</li>
+    </ul>
+    <p>The preview on the right shows exactly what will print.</p>
+  </section>
+
+  <section class="step" data-title="Adjust the order">
+    <h2>Adjust the order</h2>
+    <span class="when">Builder, only if needed</span>
+    <ul>
+      <li><b>Move</b> an item: drag it by <span class="ui">⠿</span>.</li>
+      <li><b>Add</b> an item: pick it in the list under the service (Choir, Scripture Reading, Communion, Missionary Presentation, and more), then click <span class="ui">Add</span>.</li>
+      <li><b>Hide</b> an item for this week: click <span class="ui">●</span>. Click <span class="ui">✕</span> to remove it.</li>
+      <li><b>Scripture reading:</b> type the passage in <span class="ui">Detail</span> and the reader's name below it.</li>
+      <li><b>No evening service?</b> Check <span class="ui">Cancelled</span> at the top of Sunday Evening and type the reason, like <code>Harvest Family Night</code>. The schedule updates too.</li>
+    </ul>
+  </section>
+
+  <section class="step" data-title="Save">
+    <h2>Save</h2>
+    <span class="when">Builder</span>
+    <p>Click <span class="ui">Save</span> at the top. The first time on a computer, it asks for the code.</p>
+    <p>The top bar says <b>Saved</b> when it's done. Until you save, changes stay only on the computer you're using. After saving, you can finish on any computer.</p>
+  </section>
+
+  <section class="step" data-title="Save the PDF">
+    <h2>Save the order of service PDF</h2>
+    <span class="when">Builder, by Thursday noon</span>
+    <ol>
+      <li>Click <span class="ui">Save PDF</span>. Chrome's print window opens.</li>
+      <li>Set <b>Destination</b> to <b>Save as PDF</b> and click <span class="ui">Save</span>. The file is already named for you, like <code>2026-11-01_Order of Service</code>.</li>
+      <li>Upload it to Google Drive: <b>Orders of Service → 2026 → 11_November</b> (that month's folder).</li>
+    </ol>
+    <div class="tip">The team email attaches this file from that folder, so keep the name as it is.</div>
+  </section>
+
+  <section class="step" data-title="Make the song packet">
+    <h2>Make the song packet</h2>
+    <span class="when">By Thursday noon</span>
+    <p>Click <span class="ui">Song packet</span> at the top of the builder. It opens the same Sunday.</p>
+    <a class="go alt" href="https://davidluttrull.github.io/grace-music/packet.html" target="_blank" rel="noopener">Or open the song packet page</a>
+    <ol>
+      <li>Under each song are the matching PDFs from the Song PDFs folder. Click one to see the whole PDF. The <b>← →</b> keys step through the versions.</li>
+      <li>Click the round <span class="ui">✓</span> on the version to use. Songs you've used before already have last time's version checked.</li>
+      <li>Not there? Type in <span class="ui">Find another PDF</span>, or click <span class="ui">Upload a PDF…</span> to use one from your computer.</li>
+      <li>Need a reading or an extra song? Click <span class="ui">+ Add a song or reading</span> at the bottom. Use <span class="ui">↑</span> <span class="ui">↓</span> to put it in place, and <span class="ui">Leave out</span> to skip a song.</li>
+      <li>Check the list on the right, then click <span class="ui">Save to Drive</span>.</li>
+    </ol>
+    <div class="tip">It saves as <code>2026-11-01_AM.pdf</code> in that month's Orders of Service folder, ready for the email. No upload needed.</div>
+  </section>
+
+  <section class="step" data-title="Team email">
+    <h2>Send the team email</h2>
+    <span class="when">Thursday afternoon</span>
+    <p>The email to the music team comes from David's personal Gmail. Every Thursday at noon, two drafts appear there (one for each half of the team), with the order of service and song packets attached.</p>
+    <ul>
+      <li>Before Thursday, write a personal note and any extra notes in the builder's <b>Team email</b> box (at the bottom of the Sunday), then <span class="ui">Save</span>.</li>
+      <li>Need them sooner? Click <span class="ui">Make email drafts</span> in that box.</li>
+      <li>Open Gmail → <b>Drafts</b>, read both over, and send them.</li>
+    </ul>
+    <div class="heads"><b>Make email drafts</b> replaces drafts already made for that Sunday, so use it before you edit the drafts in Gmail, not after.</div>
+  </section>
+
+  <section class="step" data-title="Print">
+    <h2>Print the bulletin inserts</h2>
+    <span class="when">Before Sunday</span>
+    <ol>
+      <li>Open the Sunday in the builder and click <span class="ui">Print</span>.</li>
+      <li>In Chrome's print window, pick the printer. Leave <b>Scale</b> at 100% and turn off <b>Headers and footers</b>.</li>
+      <li>Each page has three copies (or two). Cut them apart.</li>
+    </ol>
+    <div class="tip">If you just used <b>Save PDF</b>, Chrome may still have <b>Save as PDF</b> picked. Switch it back to the printer.</div>
+    <p><b>That's it for this Sunday.</b></p>
+  </section>
+
+  <section class="step" data-title="If something's off">
+    <h2>If something's off</h2>
+    <span class="when">Quick fixes</span>
+    <ul>
+      <li><b>A button is missing, or the page looks old:</b> press <code>Cmd+Shift+R</code> (Mac) or <code>Ctrl+Shift+R</code> (Windows) to reload it fully.</li>
+      <li><b>“That code isn't right”:</b> check the code with David and type it again.</li>
+      <li><b>Song packet can't find a PDF you just added to Drive:</b> click <span class="ui">Re-read Drive</span>.</li>
+      <li><b>Some song packet pages look like pictures:</b> that's normal for a few publishers' PDFs. They print the same.</li>
+      <li><b>Print shows tiny or cut-off sheets:</b> make sure Scale is 100% and you're using Chrome.</li>
+    </ul>
+  </section>
+</template>
+
+<!-- ===================== PLAN TWO MONTHS ===================== -->
+<template id="months">
+  <section class="step" data-title="Before you start">
+    <h2>Before you start</h2>
+    <span class="when">About a month ahead</span>
+    <p>The schedule is the <b>Music Schedule 2026</b> Google Sheet. David can share it with you. There's one tab per month (<b>Nov 2026</b>, <b>Dec 2026</b>…), with roles down the side and dates across the top.</p>
+    <p>Whatever you type in the Sheet shows up on its own on the volunteer schedule and in the order of service builder. There's nothing to publish.</p>
+    <a class="go alt" href="https://gracetoanderson.com/musicschedule" target="_blank" rel="noopener">Volunteer schedule</a>
+  </section>
+
+  <section class="step" data-title="Add the months">
+    <h2>Add the two months</h2>
+    <span class="when">Sheet</span>
+    <ol>
+      <li>Open the Sheet and click the <b>Music Schedule</b> menu (next to Help) → <b>Add next month</b>.</li>
+      <li>Do it again for the second month.</li>
+    </ol>
+    <p>Each new tab comes with the dates and the regular rotation already filled in. Songs, offering, special, and notes start blank.</p>
+    <div class="tip">The menu appears a few seconds after the Sheet opens. If it isn't there, reload the page.</div>
+  </section>
+
+  <section class="step" data-title="Check the people">
+    <h2>Check who's serving</h2>
+    <span class="when">Sheet</span>
+    <ul>
+      <li><b>Gray names</b> are the regular rotation. Leave them alone if they're right.</li>
+      <li><b>Someone different this week?</b> Type over the name. It turns <b>bold on yellow</b>, and that person sees a “Not your usual week” tag on their schedule.</li>
+      <li><b>Red names</b> are people who said they'll be out. Type in a replacement.</li>
+      <li>Typed over by mistake? Select the cells and choose <b>Music Schedule → Reset selected cells to rotation</b>.</li>
+    </ul>
+    <div class="tip">Change a regular spot for good on the <b>Rotation</b> tab instead. Every month then follows it.</div>
+  </section>
+
+  <section class="step" data-title="Pick the songs">
+    <h2>Pick the songs</h2>
+    <span class="when">Sheet</span>
+    <p>Fill in <b>Song 1–5</b> and <b>Closing</b> for each service. Write a hymn as number and title, like <code>327 He Lives</code>. Put <code>*New*</code> in front of a song the church is learning.</p>
+    <p>The <b>Songs</b> tab helps you choose. <b>Last Sung</b> is colored by how long it's been:</p>
+    <div class="swatches">
+      <span class="sw" style="background:#073763"></span><span>over a year</span>
+      <span class="sw" style="background:#6D9EEB"></span><span>over 200 days</span>
+      <span class="sw" style="background:#B7E1CD"></span><span>over 90 days</span>
+      <span class="sw" style="background:#FCE8B2"></span><span>over 45 days</span>
+      <span class="sw" style="background:#F4C7C3"></span><span>under 45 days</span>
+      <span class="sw" style="background:#FFFFFF"></span><span>already on the schedule</span>
+    </div>
+    <p><b>12 mo</b> shows how many times it's been sung in the last year. Songs you schedule show up there overnight.</p>
+  </section>
+
+  <section class="step" data-title="Offering and special">
+    <h2>Offering and special</h2>
+    <span class="when">Sheet</span>
+    <p>Type who's playing or singing in the <b>Offering</b> and <b>Special</b> rows, like <code>Kristen Baisley</code> or <code>Men's Quartet</code>. Anyone named there sees that date on their volunteer schedule.</p>
+  </section>
+
+  <section class="step" data-title="Service notes">
+    <h2>Service notes</h2>
+    <span class="when">Sheet</span>
+    <p>The blue <b>Service Notes</b> row under each date is for anything special about that service. It shows on the volunteer schedule and the order of service.</p>
+    <ul>
+      <li>Special Sundays: <code>Lord's Supper</code>, <code>Christmas Concert</code></li>
+      <li>No service: start with <b>No Service</b> or <b>Cancelled</b>, like <code>No Service – Thanksgiving Dinner</code>. The column grays out, and volunteers see it's cancelled.</li>
+    </ul>
+    <div class="tip">Check the church calendar for special Sundays, holidays, and cancelled services before you finish.</div>
+  </section>
+
+  <section class="step" data-title="Wrap up">
+    <h2>Wrap up</h2>
+    <span class="when">Done</span>
+    <ol>
+      <li>Open the volunteer schedule and look over a few dates.</li>
+      <li>Let the team know the new months are up.</li>
+    </ol>
+    <a class="go" href="https://gracetoanderson.com/musicschedule" target="_blank" rel="noopener">Check the volunteer schedule</a>
+    <div class="tip">Each week, use the <b>Prepare a Sunday</b> tab to turn this schedule into the order of service, song packet, and team email.</div>
+  </section>
+</template>
+
+<footer class="wrap">Questions? Ask David Luttrull.</footer>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const KEY = 'gbc-leader-guide';
+  const state = { tab: 'sunday', step: { sunday: 0, months: 0 } };
+  try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* private window */ }
+  const remember = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } };
+
+  let steps = [];
+  function showTab(tab) {
+    state.tab = tab;
+    document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+    $('#stepBox').innerHTML = '';
+    $('#stepBox').appendChild($('#' + tab).content.cloneNode(true));
+    steps = [...$('#stepBox').querySelectorAll('.step')];
+    $('#stepList').innerHTML = steps.map((s, i) =>
+      '<li><button type="button" data-i="' + i + '"><span class="n">' + (i + 1) + '</span>' + s.dataset.title + '</button></li>').join('');
+    showStep(Math.min(state.step[tab] || 0, steps.length - 1), false);
+  }
+  function showStep(i, scroll) {
+    state.step[state.tab] = i;
+    remember();
+    steps.forEach((s, k) => { s.hidden = k !== i; });
+    $('#stepList').querySelectorAll('button').forEach((b, k) => {
+      b.classList.toggle('current', k === i);
+      b.classList.toggle('done', k < i);
+    });
+    $('#count').textContent = 'Step ' + (i + 1) + ' of ' + steps.length;
+    $('#fill').style.width = ((i + 1) / steps.length * 100) + '%';
+    $('#back').disabled = i === 0;
+    const last = i === steps.length - 1;
+    $('#next').textContent = last ? 'Start over' : 'Next →';
+    if (scroll) $('#panel').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+  document.querySelectorAll('.tab').forEach((b) => { b.onclick = () => showTab(b.dataset.tab); });
+  $('#stepList').onclick = (e) => { const b = e.target.closest('button'); if (b) showStep(Number(b.dataset.i), false); };
+  $('#back').onclick = () => showStep(Math.max(0, state.step[state.tab] - 1), true);
+  $('#next').onclick = () => { const i = state.step[state.tab]; showStep(i === steps.length - 1 ? 0 : i + 1, true); };
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'ArrowRight' && state.step[state.tab] < steps.length - 1) showStep(state.step[state.tab] + 1, false);
+    if (e.key === 'ArrowLeft' && state.step[state.tab] > 0) showStep(state.step[state.tab] - 1, false);
+  });
+  const asked = new URLSearchParams(location.search).get('tab');
+  showTab(asked === 'months' || asked === 'sunday' ? asked : state.tab === 'months' ? 'months' : 'sunday');
+</script>
+</body>
+</html>
