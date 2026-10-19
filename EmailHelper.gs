@@ -129,11 +129,11 @@ function doGet(e) {
 // ---------- Making the drafts ----------
 
 function makeDrafts_(sunday, replace) {
-  const feed = fetchJson_(FEED_URL);
-  const orders = fetchJson_(FEED_URL + '?orders=1');
+  const [feed, orders] = fetchJsonAll_([FEED_URL, FEED_URL + '?orders=1']);   // both at once
   if (feed.status === 'error') throw new Error(feed.message);
   const email = buildEmail_(sunday, feed.services || [], orders.orders || {});
-  const files = email.attachments.map((name) => ({ name, file: findPdf_(name) }));
+  const found = findPdfs_(email.attachments);
+  const files = email.attachments.map((name) => ({ name, file: found[name] || null }));
   const blobs = files.filter((f) => f.file).map((f) => f.file.getBlob().setName(f.name));
   const missing = files.filter((f) => !f.file).map((f) => f.name);
   const lists = readLists_().filter((l) => l.length);
@@ -141,7 +141,7 @@ function makeDrafts_(sunday, replace) {
 
   const old = existingDrafts_(email.subject);
   if (old.length && !replace) return { email, made: 0, kept: old.length, missing, lists };
-  old.forEach((d) => d.deleteDraft());
+  old.forEach((d) => d.remove());
   const html = email.html + signature_();
   lists.forEach((bcc) => {
     const opts = { htmlBody: html, bcc: bcc.join(','), attachments: blobs };
@@ -296,33 +296,54 @@ function valueOf_(s, role) {
 
 // Right after the Music Schedule script is deployed, Google can answer 404 for a minute,
 // so try a few times before giving up.
-function fetchJson_(url) {
+/** Fetches several feed URLs at the same time; any that fail are tried again. Returns their JSON in order. */
+function fetchJsonAll_(urls) {
+  const out = urls.map(() => undefined);
   let code = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
+    const todo = urls.map((u, i) => i).filter((i) => out[i] === undefined);
+    if (!todo.length) break;
     if (attempt) Utilities.sleep(3000 * attempt);
-    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-    code = res.getResponseCode();
-    if (code === 200) {
-      try { return JSON.parse(res.getContentText()); } catch (err) { code = 'not JSON'; }
-    }
+    const replies = UrlFetchApp.fetchAll(todo.map((i) => ({ url: urls[i], muteHttpExceptions: true, followRedirects: true })));
+    replies.forEach((res, k) => {
+      const c = res.getResponseCode();
+      if (c !== 200) { code = c; return; }
+      try { out[todo[k]] = JSON.parse(res.getContentText()); } catch (err) { code = 'not JSON'; }
+    });
   }
-  throw new Error("The Music Schedule didn't answer (" + code + '). If it was just deployed, wait a minute and try again.');
+  if (out.some((x) => x === undefined)) {
+    throw new Error("The Music Schedule didn't answer (" + code + '). If it was just deployed, wait a minute and try again.');
+  }
+  return out;
 }
 
-/** The newest PDF with this exact name that this account can see (the shared Orders of Service folder). */
-function findPdf_(name) {
-  const it = DriveApp.searchFiles('title = "' + name.replace(/"/g, '\\"') + '" and trashed = false');
-  let best = null;
+/** For each name, the newest PDF with exactly that name this account can see (the shared Orders of Service folder), in one Drive search. */
+function findPdfs_(names) {
+  const quoted = names.map((n) => 'title = "' + n.replace(/"/g, '\\"') + '"');
+  const it = DriveApp.searchFiles('trashed = false and (' + quoted.join(' or ') + ')');
+  const best = {};
   while (it.hasNext()) {
     const f = it.next();
-    if (f.getMimeType() !== 'application/pdf') continue;
-    if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
+    const name = f.getName();
+    if (f.getMimeType() !== 'application/pdf' || names.indexOf(name) < 0) continue;
+    if (!best[name] || f.getLastUpdated() > best[name].getLastUpdated()) best[name] = f;
   }
   return best;
 }
 
+/** Drafts with exactly this subject, each with remove(). Asks Gmail for just those drafts instead of opening every one. */
 function existingDrafts_(subject) {
-  return GmailApp.getDrafts().filter((d) => d.getMessage().getSubject() === subject);
+  try {
+    const list = Gmail.Users.Drafts.list('me', { q: 'in:drafts subject:"Upcoming Assignments"', maxResults: 50 }).drafts || [];
+    return list.filter((d) => {
+      const full = Gmail.Users.Drafts.get('me', d.id, { format: 'metadata', metadataHeaders: ['Subject'] });
+      const h = ((full.message.payload || {}).headers || []).find((x) => x.name === 'Subject');
+      return h && h.value === subject;
+    }).map((d) => ({ remove: () => Gmail.Users.Drafts.remove('me', d.id) }));
+  } catch (err) {   // if the Gmail service isn't available, fall back to the slow way
+    return GmailApp.getDrafts().filter((d) => d.getMessage().getSubject() === subject)
+      .map((d) => ({ remove: () => d.deleteDraft() }));
+  }
 }
 
 function readLists_() {
