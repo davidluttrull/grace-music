@@ -32,8 +32,9 @@
  * The Songs tab lists every congregational song with its last date (newest in
  * the Song Log, scheduled dates included) and times sung in the last 12
  * months; both are formulas reading the Song Log. sortSongs_ keeps the tab in
- * four sections (Hymns by number, Modern Songs A-Z, Christmas, Removed) and
- * runs when a Category or Removed cell changes. updateSongList runs every
+ * five sections (Hymns by number, Majesty Hymnal by number, Modern Songs A-Z,
+ * Christmas, Removed) and runs when a Category or Removed cell changes, or a
+ * "Majesty ###" note is typed or cleared. updateSongList runs every
  * night once setupSongList has been run.
  *
  * The song packet page (packet.html) uses doPost with the same code to read
@@ -66,7 +67,9 @@ const SONG_SECTION = 'Songs';        // the month tabs' section with Song 1-5 an
 // Songs tab columns: # | Song | Last Sung | 12 mo | Category | Notes | Removed | Other names | ID.
 // Last Sung and 12 mo are array formulas in row 1, so the script never writes C or D.
 const SONG_COLS = 9;
-const SONG_HEADINGS = ['Hymns', 'Modern Songs', 'Christmas', 'Removed'];
+const SONG_HEADINGS = ['Hymns', 'Majesty Hymnal', 'Modern Songs', 'Christmas', 'Removed'];
+// A song with no Rejoice number whose note starts "Majesty 345" is in the Majesty hymnal.
+const MAJESTY_NOTE = /^\s*Majesty\s+(\d+)/i;
 const NEW_SONGS_LABEL = 'Add new songs below this line';
 const NEW_SONG_ROWS = 5;
 const CANCELLED_NOTE = /cancel|^\s*no\b.*\bservice/i;
@@ -761,12 +764,13 @@ function onOpen() {
     .addToUi();
 }
 
-/** Re-sorts the Songs tab when a song's Category or Removed box changes. */
+/** Re-sorts the Songs tab when a song's Category or Removed box changes, or a Majesty note comes or goes. */
 function onEdit(e) {
   const r = e && e.range;
   if (!r || r.getSheet().getName() !== SONGS_SHEET || r.getLastRow() < 2) return;
   const touches = (col) => r.getColumn() <= col && r.getLastColumn() >= col;
-  if (!touches(5) && !touches(7)) return;
+  const majesty = touches(6) && (MAJESTY_NOTE.test(e.value || '') || MAJESTY_NOTE.test(e.oldValue || ''));
+  if (!touches(5) && !touches(7) && !majesty) return;
   // Wait until a new song has a number or title before moving it.
   const ab = r.getSheet().getRange(r.getRow(), 1, r.getNumRows(), 2).getValues();
   if (ab.some((row) => String(row[0]).trim() || String(row[1]).trim())) sortSongs_();
@@ -1017,10 +1021,17 @@ function assignSongIds_(songs) {
   });
 }
 
+/** The song's Majesty hymnal number, or 0. Songs with a Rejoice number stay with the hymns. */
+function majestyNum_(s) {
+  const m = s.num ? null : MAJESTY_NOTE.exec(s.notes);
+  return m ? Number(m[1]) : 0;
+}
+
 function songSection_(s) {
-  if (s.removed) return 3;
-  if (s.cat.toLowerCase() === 'christmas') return 2;
-  return s.num ? 0 : 1;
+  if (s.removed) return 4;
+  if (s.cat.toLowerCase() === 'christmas') return 3;
+  if (s.num) return 0;
+  return majestyNum_(s) ? 1 : 2;
 }
 
 function compareSongs_(a, b) {
@@ -1029,17 +1040,20 @@ function compareSongs_(a, b) {
     const d = (parseInt(a.num, 10) || 99999) - (parseInt(b.num, 10) || 99999);
     return d || (a.num < b.num ? -1 : a.num > b.num ? 1 : 0);
   }
+  const ma = majestyNum_(a), mb = majestyNum_(b);
+  if (!!ma !== !!mb) return ma ? -1 : 1;
+  if (ma !== mb) return ma - mb;
   const x = a.title.toLowerCase(), y = b.title.toLowerCase();
   return x < y ? -1 : x > y ? 1 : 0;
 }
 
-/** Rewrites the Songs tab in its four sections, with a few blank rows at the bottom for new songs. */
+/** Rewrites the Songs tab in its five sections, with a few blank rows at the bottom for new songs. */
 function sortSongs_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SONGS_SHEET);
   if (!sheet) return;
   const songs = readSongs_(sheet);
   assignSongIds_(songs);
-  const groups = [[], [], [], []];
+  const groups = SONG_HEADINGS.map(() => []);
   songs.forEach((s) => groups[songSection_(s)].push(s));
 
   const left = [], right = [], kinds = [];

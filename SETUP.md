@@ -105,7 +105,7 @@ You don't need a new deployment for this; the volunteer page doesn't use these t
 - **12 mo**: how many times it was sung in the last 12 months. The more often, the darker green.
 - **Category**, **Notes** (including when a song was introduced), and **Removed**.
 - **Other names**: other ways a title gets typed on the schedule, separated by semicolons ("Amazing Grace (Chains Are Gone)"). Only needed when a song doesn't match on its own.
-- The songs are in four sections: **Hymns** by number, **Modern Songs** A–Z, **Christmas**, and **Removed**. Checking **Removed**, or changing a song's **Category** to or from Christmas, moves it to the right section right away. Put the reason in Notes.
+- The songs are in five sections: **Hymns** by number, **Majesty Hymnal** by number, **Modern Songs** A–Z, **Christmas**, and **Removed**. A song goes under Majesty Hymnal when it has no Rejoice number and its Notes start with the Majesty number ("Majesty 345"). Checking **Removed**, changing a song's **Category** to or from Christmas, or typing or clearing a Majesty note moves it to the right section right away. Put the reason in Notes.
 - To add a song, type it in the rows under **Add new songs below this line** (the number if it has one, the title, and a category). It moves into place the next time the list updates.
 - Don't type in Last Sung or 12 mo; they're formulas.
 
