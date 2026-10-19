@@ -294,10 +294,19 @@ function valueOf_(s, role) {
 
 // ---------- Helpers ----------
 
+// Right after the Music Schedule script is deployed, Google can answer 404 for a minute,
+// so try a few times before giving up.
 function fetchJson_(url) {
-  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-  if (res.getResponseCode() !== 200) throw new Error("The Music Schedule didn't answer (" + res.getResponseCode() + '). Try again in a minute.');
-  return JSON.parse(res.getContentText());
+  let code = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) Utilities.sleep(3000 * attempt);
+    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+    code = res.getResponseCode();
+    if (code === 200) {
+      try { return JSON.parse(res.getContentText()); } catch (err) { code = 'not JSON'; }
+    }
+  }
+  throw new Error("The Music Schedule didn't answer (" + code + '). If it was just deployed, wait a minute and try again.');
 }
 
 /** The newest PDF with this exact name that this account can see (the shared Orders of Service folder). */
