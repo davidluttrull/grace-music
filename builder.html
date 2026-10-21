@@ -202,7 +202,7 @@
     <span class="spacer"></span>
     <span class="status" id="status"></span>
     <button type="button" class="btn" id="saveBtn">Save</button>
-    <button type="button" class="btn" id="pdfBtn" title="One copy at its own size, to email as an attachment">Save PDF</button>
+    <button type="button" class="btn" id="pdfBtn" title="Downloads one copy at its own size, to email as an attachment">Save PDF</button>
     <button type="button" class="btn primary" id="printBtn">Print</button>
     <a class="btn" id="packetLink" href="packet.html" title="Pick the song PDFs and combine them into one">Song packet</a>
     <a class="help" href="leader-guide.html" target="_blank" rel="noopener">Help</a>
@@ -880,8 +880,8 @@
   }
   $('#printBtn').onclick = printSheet;
 
-  // One copy on a page its own size, for emailing. Chrome's print dialog saves it
-  // when the Destination is "Save as PDF"; the file name comes from the page title.
+  // Save PDF downloads one copy on a page its own size, for emailing. The page is drawn into a
+  // picture at about 400 dpi (html2canvas) and put in a PDF (jsPDF), so there's no print dialog.
   function pdfName() {
     // Matches the Orders of Service folder ("2026-10-18_Order of Service"), so the email helper finds it.
     const svc = sheet.length ? sheet[0].svc : null;
@@ -889,17 +889,81 @@
     if (svc.service === 'Sunday AM' || svc.service === 'Sunday PM') return svc.date + '_Order of Service';
     return svc.date + '_' + svc.service + ' Order of Service';
   }
-  function savePdf() {
+  const PDF_LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+  const PDF_SCALE = 4;   // 96 px per inch x 4 = about 400 dpi
+  let pdfLibs = null;
+  function loadPdfLibs() {
+    if (!pdfLibs) {
+      pdfLibs = Promise.all(PDF_LIBS.map((src) => new Promise((resolve, reject) => {
+        const tag = document.createElement('script');
+        tag.src = src;
+        tag.onload = resolve;
+        tag.onerror = () => { pdfLibs = null; reject(new Error('Couldn’t load the PDF tools. Check your connection and try again.')); };
+        document.head.appendChild(tag);
+      })));
+    }
+    return pdfLibs;
+  }
+  // html2canvas ignores CSS filters, so the black logo is made by hand: every pixel black, same transparency.
+  let blackLogo = null;
+  function blackLogoUrl() {
+    if (!blackLogo) {
+      blackLogo = new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          const g = c.getContext('2d');
+          g.drawImage(img, 0, 0);
+          const px = g.getImageData(0, 0, c.width, c.height);
+          for (let i = 0; i < px.data.length; i += 4) px.data[i] = px.data[i + 1] = px.data[i + 2] = 0;
+          g.putImageData(px, 0, 0);
+          resolve(c.toDataURL('image/png'));
+        };
+        img.onerror = () => { blackLogo = null; reject(new Error('Couldn’t load the logo.')); };
+        img.src = 'logo.png';
+      });
+    }
+    return blackLogo;
+  }
+  async function makePdf() {
+    await Promise.all([loadPdfLibs(), document.fonts.ready]);
     const L = LAYOUTS[layout];
-    const page = document.createElement('style');
-    page.textContent = '@page { size: ' + L.width + 'in ' + L.height + 'in; margin: 0; }' +
-      '@media print { #printArea { width: ' + L.width + 'in !important; height: ' + L.height + 'in !important; overflow: hidden; } }';
-    document.head.appendChild(page);
-    const title = document.title;
-    document.title = pdfName();
-    $('#printArea').innerHTML = $('#half').outerHTML.replace(' id="half"', '');
-    window.addEventListener('afterprint', () => { page.remove(); document.title = title; }, { once: true });
-    window.print();
+    // Draw a copy at full size, away from the preview's zoom.
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-20000px;top:0;background:#fff';
+    holder.innerHTML = $('#half').outerHTML.replace(' id="half"', '');
+    const copy = holder.firstElementChild;
+    const logo = copy.querySelector('.half-foot img');
+    document.body.appendChild(holder);
+    try {
+      if (logo) {
+        logo.style.filter = 'none';
+        logo.src = await blackLogoUrl();
+        await logo.decode().catch(() => {});
+      }
+      const canvas = await window.html2canvas(copy, { scale: PDF_SCALE, backgroundColor: '#ffffff', logging: false });
+      const doc = new window.jspdf.jsPDF({ unit: 'in', format: [L.width, L.height], orientation: L.width > L.height ? 'landscape' : 'portrait', compress: true });
+      doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, L.width, L.height, undefined, 'FAST');
+      return doc;
+    } finally {
+      holder.remove();
+    }
+  }
+  async function savePdf() {
+    const btn = $('#pdfBtn');
+    btn.disabled = true;
+    btn.textContent = 'Making PDF…';
+    try {
+      (await makePdf()).save(pdfName() + '.pdf');
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save PDF';
+    }
   }
   $('#pdfBtn').onclick = savePdf;
   // Ctrl/Cmd+P prints the same two-up sheet.
