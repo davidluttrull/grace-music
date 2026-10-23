@@ -132,7 +132,7 @@ When you click **Make email drafts** in the builder, it makes the drafts for tha
 - **Notes**: no-service and Lord's Supper notes from Service Notes, anything unusual in Sunday's saved order (the choir led by Kevin Plew, a missionary presentation, Communion, a baptism), any song marked *New*, and your extra notes from the builder. If there's nothing, it says "This coming Sunday is a normal order of service."
 - **Next Sunday**: the instrumentalists, offering, and special. **Two** and **Three Sundays Out**: offering and special, with that Sunday's Service Notes next to the date, or "TBA".
 - Your Gmail signature.
-- Attached: this Sunday's `YYYY-MM-DD_Order of Service.pdf` and `YYYY-MM-DD_AM.pdf`, and next Sunday's `YYYY-MM-DD_AM.pdf`, from the Orders of Service folder. Anything that isn't there yet is listed on the page that opens after **Make email drafts** (or in the "drafts are ready" email, if the weekly run is on), so you can attach it by hand.
+- Attached: this Sunday's `YYYY-MM-DD_Order of Service.pdf` and `YYYY-MM-DD_AM.pdf`, and next Sunday's `YYYY-MM-DD_AM.pdf`, taken only from that date's month folder in Orders of Service (for example 2026 → 11_November). A file with the same name anywhere else, such as one someone else shares with the account, is never attached. Anything that isn't there yet is listed on the page that opens after **Make email drafts** (or in the "drafts are ready" email, if the weekly run is on), so you can attach it by hand.
 
 ### Setting it up (one time)
 

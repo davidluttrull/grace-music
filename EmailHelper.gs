@@ -22,6 +22,10 @@
  */
 
 const FEED_URL = 'https://script.google.com/macros/s/AKfycbyN_FOd4twDKmMrDk5l3NqTmKRJrKhIC3kUgkuumCKGoxK_wlkFxZlWevtGUyPtSnPE8Q/exec';
+// Orders of Service (school Drive, shared with this account). Attachments only come from its
+// year / month folders, so a same-named PDF someone else shares with this account is never used.
+const ORDERS_FOLDER = '0B_yrCm_KORazWDBYMUdXX1RrT1E';
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const LISTS_PROP = 'LISTS_SHEET_ID';
 const KEY_PROP = 'HELPER_KEY';
 const DRAFT_DAY = '';                 // '' = only when the builder's button is clicked; 'TUESDAY' = also every Tuesday
@@ -317,17 +321,31 @@ function fetchJsonAll_(urls) {
   return out;
 }
 
-/** For each name, the newest PDF with exactly that name this account can see (the shared Orders of Service folder), in one Drive search. */
+/**
+ * For each name ("2026-11-01_AM.pdf"), the newest PDF with exactly that name in its month's
+ * folder of Orders of Service (2026 / 11_November). Nothing outside that folder is looked at.
+ */
 function findPdfs_(names) {
-  const quoted = names.map((n) => 'title = "' + n.replace(/"/g, '\\"') + '"');
-  const it = DriveApp.searchFiles('trashed = false and (' + quoted.join(' or ') + ')');
+  const orders = DriveApp.getFolderById(ORDERS_FOLDER);
+  const sub = (folder, name) => {
+    const it = folder ? folder.getFoldersByName(name) : null;
+    return it && it.hasNext() ? it.next() : null;
+  };
+  const months = {};   // "2026-11" -> that month's folder, or null
   const best = {};
-  while (it.hasNext()) {
-    const f = it.next();
-    const name = f.getName();
-    if (f.getMimeType() !== 'application/pdf' || names.indexOf(name) < 0) continue;
-    if (!best[name] || f.getLastUpdated() > best[name].getLastUpdated()) best[name] = f;
-  }
+  names.forEach((name) => {
+    const m = /^(\d{4})-(\d{2})-\d{2}_/.exec(name);
+    if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) return;
+    const key = m[1] + '-' + m[2];
+    if (!(key in months)) months[key] = sub(sub(orders, m[1]), m[2] + '_' + MONTH_NAMES[Number(m[2]) - 1]);
+    if (!months[key]) return;
+    const it = months[key].getFilesByName(name);
+    while (it.hasNext()) {
+      const f = it.next();
+      if (f.isTrashed() || f.getMimeType() !== 'application/pdf') continue;
+      if (!best[name] || f.getLastUpdated() > best[name].getLastUpdated()) best[name] = f;
+    }
+  });
   return best;
 }
 
