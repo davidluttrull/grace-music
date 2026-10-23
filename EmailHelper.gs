@@ -114,7 +114,7 @@ function doGet(e) {
     '<div style="font:15px/1.5 system-ui,sans-serif;max-width:520px;margin:40px auto;padding:0 16px">' +
     '<h2 style="margin:0 0 8px">' + title + '</h2>' + body + '</div>').setTitle('Song email');
   if (!p.key || p.key !== PropertiesService.getScriptProperties().getProperty(KEY_PROP)) {
-    return page("That link isn't right", '<p>Run <b>builderLink</b> in the email helper project and paste the new link into the builder.</p>');
+    return page("That link isn't right", '<p>Run <b>builderLink</b> in the email helper project, then in the builder click <b>Change email link</b> and paste the new link.</p>');
   }
   try {
     const sunday = /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? p.date : comingSunday_();

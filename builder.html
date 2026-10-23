@@ -583,6 +583,7 @@
     return '<section class="panel email-panel">' +
       '<div class="panel-head"><h2>Team email</h2>' +
       '<button type="button" class="btn small" id="emailBtn">Make email drafts</button>' +
+      '<button type="button" class="btn small" id="emailLinkBtn">Change email link</button>' +
       '<span class="sub">Make email drafts saves this Sunday, then makes the two Gmail drafts from it, with the PDFs attached ' +
       '(replacing any already made for this Sunday).</span></div>' +
       '<div class="panel-body">' +
@@ -591,14 +592,19 @@
       '</div></section>';
   }
 
+  // Asks for the email helper link and remembers it on this computer. Returns
+  // the link, or '' if it was cancelled or doesn't look right.
+  function askEmailLink(current) {
+    const link = (prompt('Paste the email helper link (it comes from running builderLink in the helper; see SETUP.md, "Weekly song email"):', current || '') || '').trim();
+    if (!link) return '';
+    if (!/^https:\/\/script\.google\.com\/.+[?&]key=/.test(link)) { alert('That doesn’t look like the email helper link.'); return ''; }
+    store((s) => s.setItem(EMAIL_LINK_KEY, link));
+    return link;
+  }
+
   async function makeEmailDrafts() {
-    let link = store((s) => s.getItem(EMAIL_LINK_KEY));
-    if (!link) {
-      link = (prompt('Paste the email helper link (it comes from running builderLink in the helper; see SETUP.md, "Weekly song email"):') || '').trim();
-      if (!link) return;
-      if (!/^https:\/\/script\.google\.com\/.+[?&]key=/.test(link)) { alert('That doesn’t look like the email helper link.'); return; }
-      store((s) => s.setItem(EMAIL_LINK_KEY, link));
-    }
+    const link = store((s) => s.getItem(EMAIL_LINK_KEY)) || askEmailLink('');
+    if (!link) return;
     const part = emailPart();
     if (!part) return;
     const win = window.open('about:blank', '_blank');   // opened now so the browser doesn't block it after saving
@@ -619,6 +625,11 @@
   });
   $('#editor').addEventListener('click', (e) => {
     if (e.target.id === 'emailBtn') makeEmailDrafts();
+    if (e.target.id === 'emailLinkBtn') {
+      const before = store((s) => s.getItem(EMAIL_LINK_KEY)) || '';
+      const link = askEmailLink(before);
+      if (link && link !== before) flashStatus('Email link saved on this computer.');
+    }
   });
 
   function teamHtml(part) {

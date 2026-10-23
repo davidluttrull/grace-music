@@ -143,7 +143,7 @@ When you click **Make email drafts** in the builder, it makes the drafts for tha
 5. Pick **setupEmailHelper** in the function dropdown and click **Run**. Allow the permissions (Gmail, Drive, Sheets, connecting to the Music Schedule, and running on a schedule); click **Advanced → Go to Song Email (unsafe)** if Google warns you. It makes a **Song Email Lists** sheet in your personal Drive with the two lists from your last song email; the Execution log has its link. Open it and check the lists.
 6. Click **Deploy → New deployment**, choose **Web app**, set **Execute as: Me** and **Who has access: Anyone**, and click **Deploy**.
 7. Pick **builderLink** and click **Run**. Copy the **Builder link** from the Execution log.
-8. In the builder, open a Sunday, click **Make email drafts** in the **Team email** box, and paste the link. That computer remembers it.
+8. In the builder, open a Sunday, click **Make email drafts** in the **Team email** box, and paste the link. That computer remembers it. To replace it later, click **Change email link** next to that button.
 
 ### Each week
 
@@ -154,7 +154,7 @@ When you click **Make email drafts** in the builder, it makes the drafts for tha
 
 **Make email drafts** replaces drafts already made for that Sunday, so use it before you edit the drafts, not after. To change who gets the email, edit the Song Email Lists sheet. To run it without the builder, run **makeDraftsNow** in the Song Email project.
 
-The builder link has a private key at the end, stored as **HELPER_KEY** under the Song Email project's **Project Settings → Script Properties** (next to **LISTS_SHEET_ID**, which points to the Song Email Lists sheet). If the link ever gets out, delete **HELPER_KEY**, then run **setupEmailHelper** and **builderLink** again for a new link. The builder keeps using the link it remembered and has no button to change it yet, so ask Claude to help put the new one in.
+The builder link has a private key at the end, stored as **HELPER_KEY** under the Song Email project's **Project Settings → Script Properties** (next to **LISTS_SHEET_ID**, which points to the Song Email Lists sheet). If the link ever gets out, delete **HELPER_KEY**, then run **setupEmailHelper** and **builderLink** again for a new link. On each computer that uses the builder, click **Change email link** in the **Team email** box and paste the new link.
 
 To have the drafts made automatically every week instead, set `DRAFT_DAY` at the top of `EmailHelper.gs` to a day (`'TUESDAY'`) and run **setupEmailHelper** again. That weekly run leaves drafts alone if they were already made that week, and emails you when they're ready. Set it back to `''` and run **setupEmailHelper** to turn it off. Either way, your lists stay as they are.
 
