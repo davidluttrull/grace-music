@@ -9,6 +9,8 @@ It has two parts:
 
 Volunteers don't need a Google account. Anyone with the link can see the schedule, which is the same as sharing the Google Doc by link today.
 
+The same script also runs the **Songs** and **Song Log** tabs, the order of service builder (`builder.html`), and the song packet page (`packet.html`). The music leader guide (`leader-guide.html`) explains the weekly steps for whoever leads music. A second, separate script in your personal Google account (`EmailHelper.gs`) makes the weekly team email. Each has its own section below.
+
 ## 1. Add the script to the Sheet
 
 1. Open **Music Schedule 2026**, then **Extensions → Apps Script**.
@@ -35,6 +37,8 @@ To check it, open that URL on your phone. You should see text that starts with `
 
 Near the bottom of `index.html`, find the line that starts with `const API_URL =` and put the `/exec` URL between the quotes. Then publish the page to GitHub Pages (Claude can do this part).
 
+The same URL is also in `builder.html` and `packet.html` (`const API_URL =`) and in `EmailHelper.gs` (`const FEED_URL =`). All four must match.
+
 You only do this once. Deploying a new version of the script later keeps the same URL.
 
 ## 4. Share it with volunteers
@@ -59,10 +63,11 @@ Send the page's address, <https://gracetoanderson.com/musicschedule>. Each volun
 
 Gray names come from the Rotation tab. To change one week, type a name over it. The cell turns bold on yellow so you can see what you changed. Typing over a gray name only affects that one cell; the rest of the month still follows the rotation.
 
-The **Music Schedule** menu (it appears a few seconds after the Sheet opens) has two items:
+The **Music Schedule** menu (it appears a few seconds after the Sheet opens) has three items:
 
 - **Reset selected cells to rotation:** select one or more cells you changed and click this to bring back the rotation names. You can select a whole block, or the whole tab; song, offering, special, and notes cells are left alone.
 - **Add next month:** makes the next month's tab (for example **Jan 2027**) right after the latest one. Its dates fill in, every name comes from the rotation, and songs and notes start blank. The page finds the new tab on its own; you don't need to redeploy.
+- **Update song list:** fills the Song Log from the month tabs' songs right now, instead of waiting for the nightly run. See "Song list" below.
 
 The first time you use the menu, Google asks for permission the same way it did in step 2.
 
@@ -76,7 +81,7 @@ The first time you use the menu, Google asks for permission the same way it did 
 
 ## Updating the script
 
-When `Code.gs` changes, paste the new version into Apps Script and save, then reload the Sheet. That's all the menu needs. If the change touches what the page shows (the `doGet` part), also click **Deploy → Manage deployments**, click the pencil icon, choose **New version** under Version, and click **Deploy**. Don't use **New deployment**, because that creates a new URL and the page would stop reaching the script.
+When `Code.gs` changes, paste the new version into Apps Script and save, then reload the Sheet. That's all the menu and the Songs tab need. If the change touches anything the web pages or the email helper use (the volunteer page, the builder, Save PDF, or the song packet page), also click **Deploy → Manage deployments**, click the pencil icon, choose **New version** under Version, and click **Deploy**. Don't use **New deployment**, because that creates a new URL and the pages and the email helper would stop reaching the script. (If that ever happens, put the new URL in all four places listed in step 3.)
 
 ## Turning on "I'll be out" (one time)
 
@@ -97,7 +102,7 @@ The **Songs** tab lists every congregational song, and the **Song Log** tab behi
 1. Paste the new `Code.gs` into Apps Script and save.
 2. In the function dropdown, pick **setupSongList** and click **Run**. Google asks for permission again, this time to run on a schedule. Allow it. This updates the song list now and every night around 2 AM.
 
-You don't need a new deployment for this; the volunteer page doesn't use these tabs.
+You don't need a new deployment for this; the update runs inside the Sheet, not through the web pages.
 
 ### The Songs tab
 
@@ -127,15 +132,15 @@ When you click **Make email drafts** in the builder, it makes the drafts for tha
 - **Notes**: no-service and Lord's Supper notes from Service Notes, anything unusual in Sunday's saved order (the choir led by Kevin Plew, a missionary presentation, Communion, a baptism), any song marked *New*, and your extra notes from the builder. If there's nothing, it says "This coming Sunday is a normal order of service."
 - **Next Sunday**: the instrumentalists, offering, and special. **Two** and **Three Sundays Out**: offering and special, with that Sunday's Service Notes next to the date, or "TBA".
 - Your Gmail signature.
-- Attached: this Sunday's `YYYY-MM-DD_Order of Service.pdf` and `YYYY-MM-DD_AM.pdf`, and next Sunday's `YYYY-MM-DD_AM.pdf`, from the Orders of Service folder. Anything that isn't there yet is listed in the "drafts are ready" email, so you can attach it by hand.
+- Attached: this Sunday's `YYYY-MM-DD_Order of Service.pdf` and `YYYY-MM-DD_AM.pdf`, and next Sunday's `YYYY-MM-DD_AM.pdf`, from the Orders of Service folder. Anything that isn't there yet is listed on the page that opens after **Make email drafts** (or in the "drafts are ready" email, if the weekly run is on), so you can attach it by hand.
 
 ### Setting it up (one time)
 
 1. Share the **Orders of Service** folder from your school Drive with dmluttrull@gmail.com as a Viewer. (Done.)
 2. Signed in as **dmluttrull@gmail.com**, go to <https://script.google.com> and click **New project**. Name it **Song Email**.
 3. Delete what's in `Code.gs` and paste in this folder's `EmailHelper.gs`.
-4. Click **Project Settings** (the gear), check **Show "appsscript.json" manifest file in editor**, go back to the editor, open `appsscript.json`, and replace it with this folder's `EmailHelper.appsscript.json`. Save.
-5. Pick **setupEmailHelper** in the function dropdown and click **Run**. Allow the permissions (Gmail, Drive, Sheets, and running on a schedule); click **Advanced → Go to Song Email (unsafe)** if Google warns you. It makes a **Song Email Lists** sheet in your personal Drive with the two lists from your last song email; the Execution log has its link. Open it and check the lists.
+4. Click **Project Settings** (the gear), check **Show "appsscript.json" manifest file in editor**, go back to the editor, open `appsscript.json`, and replace it with this folder's `EmailHelper.appsscript.json`. Save. This also turns on the **Gmail** service (it shows under **Services** in the left sidebar), which the helper uses to find old drafts and add your signature.
+5. Pick **setupEmailHelper** in the function dropdown and click **Run**. Allow the permissions (Gmail, Drive, Sheets, connecting to the Music Schedule, and running on a schedule); click **Advanced → Go to Song Email (unsafe)** if Google warns you. It makes a **Song Email Lists** sheet in your personal Drive with the two lists from your last song email; the Execution log has its link. Open it and check the lists.
 6. Click **Deploy → New deployment**, choose **Web app**, set **Execute as: Me** and **Who has access: Anyone**, and click **Deploy**.
 7. Pick **builderLink** and click **Run**. Copy the **Builder link** from the Execution log.
 8. In the builder, open a Sunday, click **Make email drafts** in the **Team email** box, and paste the link. That computer remembers it.
@@ -149,6 +154,8 @@ When you click **Make email drafts** in the builder, it makes the drafts for tha
 
 **Make email drafts** replaces drafts already made for that Sunday, so use it before you edit the drafts, not after. To change who gets the email, edit the Song Email Lists sheet. To run it without the builder, run **makeDraftsNow** in the Song Email project.
 
+The builder link has a private key at the end, stored as **HELPER_KEY** under the Song Email project's **Project Settings → Script Properties** (next to **LISTS_SHEET_ID**, which points to the Song Email Lists sheet). If the link ever gets out, delete **HELPER_KEY**, then run **setupEmailHelper** and **builderLink** again for a new link. The builder keeps using the link it remembered and has no button to change it yet, so ask Claude to help put the new one in.
+
 To have the drafts made automatically every week instead, set `DRAFT_DAY` at the top of `EmailHelper.gs` to a day (`'TUESDAY'`) and run **setupEmailHelper** again. That weekly run leaves drafts alone if they were already made that week, and emails you when they're ready. Set it back to `''` and run **setupEmailHelper** to turn it off. Either way, your lists stay as they are.
 
 ## Order of service builder
@@ -161,19 +168,21 @@ The builder makes the printed order of service from the same Sheet. Open <https:
 2. In the function dropdown, pick **setupOrderCode** and click **Run**. Open **Execution log**: the last line reads **Order of service code: 123456** with your own number. Keep it; the builder asks for it the first time you save, and that computer remembers it. Running it again shows the same code.
 3. Click **Deploy → Manage deployments**, the pencil icon, **New version**, then **Deploy**.
 
-To change the code, edit **ORDER_CODE** under **Project Settings → Script Properties**.
+To change the code, edit **ORDER_CODE** under **Project Settings → Script Properties**. The song packet page uses the same code, and each computer remembers it, so after a change the pages ask for the new one.
+
+**Save PDF** saves to Drive through the script, so it needs the Drive permission from the song packet setup (steps 2 and 3 under "Song packet", below). If the song packet page already works, Save PDF only needs the newest `Code.gs` pasted in and a **New version** deployed. Until then, Save PDF downloads the PDF instead.
 
 ### Each week
 
 1. Pick the date at the top, and the sheet size next to it: **3 per page** (third sheet, 3⅔ × 8½ in, the default), **2 per page** (half sheet, 5½ × 8½ in), or **6 per page** (3⅔ × 4¼ in, three across and two down, the default for Wednesdays). Wednesdays and other sheets each remember their own size. A Sunday sheet has the morning and evening services; a Wednesday or a one-time service gets its own sheet. Cancelled services are left off.
 2. Each service starts from its default order with that week's songs, prelude, offering, special, and team filled in from the Sheet. Those show in gray with "from Song 1" (or similar) beside them. Type over one to change it on this sheet only; clear it to go back to the Sheet's value. Changes in the Sheet show up in the builder until you type over them.
 3. Add verse notes ("all 4", "1, 3-4") in each hymn's Verses box. Hymn numbers and a "*New*" at the start of a song title come from the Sheet automatically.
-4. Drag ⠿ to reorder. **Add** puts in a hymn, special song, choir, missionary presentation, Scripture reading, Communion, and more, just above the closing song. ● leaves an item off the sheet without deleting it; ✕ removes it.
+4. Drag ⠿ to reorder within a service; a line shows where the item will land. **Add** puts in a hymn, special song, choir, missionary presentation, Scripture reading, Communion, and more, just above the closing song. ● leaves an item off the sheet without deleting it; ✕ removes it.
 5. The music leader prints in bold under each service's name ("Music Leader: David Luttrull"). Services with no leader in the Sheet (Sunday evening) have a Music leader box for it. **Show team credits** turns the Accompanists, Singers, and Media list on or off.
 6. The preview shows one copy exactly as it prints. If a week runs long, the text shrinks a little to fit; if it still doesn't fit, the preview says so.
 7. **Save** stores the sheet on the **Orders** tab, so you can finish it later or on another computer. Until you save, changes are kept on the computer you're using.
-8. **Print** prints two, three, or six copies on one landscape letter page; cut them apart. Use Chrome, leave Scale at 100%, and turn off Headers and footers. To keep a PDF for your Drive folder, choose **Save as PDF** as the printer.
-9. **Save PDF** makes a PDF of one copy, on a page the size of that sheet, and saves it straight into Google Drive: **My Drive → Grace → Orders of Service → 2026 → 11_November** (the year and month of that Sunday; a missing month folder is made for you). It's named like "2026-11-01_Order of Service.pdf", which is where the weekly email looks for it. Saving again replaces the older copy (it goes to the Drive trash). It takes a few seconds, and the bar at the top says where it went. If it can't reach Drive, the PDF downloads instead. The PDF is a sharp picture of the sheet (about 400 dpi), so it prints cleanly, but its text can't be selected.
+8. **Print** prints two, three, or six copies on one landscape letter page; cut them apart. Use Chrome, leave Scale at 100%, and turn off Headers and footers. For a PDF to keep, use **Save PDF** instead.
+9. **Save PDF** makes a PDF of one copy, on a page the size of that sheet, and saves it straight into Google Drive: **My Drive → Grace → Orders of Service → 2026 → 11_November** (the year and month of that sheet's date; a missing year or month folder is made for you). A Sunday sheet is named like "2026-11-01_Order of Service.pdf", which is the name the weekly email looks for. A Wednesday is "2026-11-04_Wednesday Order of Service.pdf", and a one-time service uses its name ("2026-12-24_Christmas Eve Order of Service.pdf"). Saving again replaces the older copy (it goes to the Drive trash). It takes a few seconds, uses the same code as **Save**, and the bar at the top says where it went. It doesn't save the sheet itself, so click **Save** too. If it can't reach Drive, the PDF downloads instead; put it in the month folder by hand so the email finds it. The PDF is a sharp picture of the sheet (about 400 dpi), so it prints cleanly, but its text can't be selected.
 
 **Cancelling Sunday evening:** check **Cancelled** at the top of the Sunday Evening section and type a reason if you have one ("Thanksgiving Dinner"). The sheet prints "No Service – Thanksgiving Dinner" under Sunday Evening in place of the service. **Save** writes the same text to Sunday PM's Service Notes row in the Sheet, so the Sheet and the volunteer page show the service as cancelled too. It works the other way as well: a Sunday PM note you type in the Sheet that starts with "No Service" or "Cancelled" shows up checked in the builder, with the rest of the note as the reason. Uncheck Cancelled and Save to clear the note and bring the service back; its order is kept.
 
@@ -208,8 +217,14 @@ The song packet page puts together the week's `YYYY-MM-DD_AM.pdf` for you. You p
 4. If a PDF has the song in more than one key or arrangement, use only the pages you want. In the close-up view, click a page to leave it out (click it again to put it back), or Shift-click to do a run of pages. You can also type the pages to keep in the **Pages** box at the top, like `4-6` or `1, 3`. **All pages** puts them all back. The choice and its page count show "pages 4–6 of 9," and the page remembers the pages along with the PDF for that song.
 5. If the PDF you want isn't shown, type in **Find another PDF in Song PDFs** to search every file name, or click **Upload a PDF…** to use one from your computer. Uploaded PDFs are kept in Song PDFs → **Added from the packet page**, so they turn up next time. Move them into the right folder whenever you like.
 6. **+ Add a song or reading** at the bottom adds something that isn't in the order of service, like a Scripture reading. Type its name to find matching PDFs, or search or upload as above. ↑ and ↓ move any item, and **Leave out** skips a song.
-7. **Save to Drive** combines everything, in the order shown, into `YYYY-MM-DD_AM.pdf` in Orders of Service → 2026 → that month's folder, which is where the weekly email looks for it. If that file is already there, the old copy goes to the Drive trash. **Download** saves the same PDF to your computer.
+7. **Save to Drive** combines everything, in the order shown, into `YYYY-MM-DD_AM.pdf` in Orders of Service → 2026 → that month's folder, which is where the weekly email looks for it. A Sunday evening packet is `YYYY-MM-DD_PM.pdf`, a Wednesday is `YYYY-MM-DD_Wed.pdf`, and a one-time service uses its name (`2026-12-24_Christmas Eve.pdf`); the email only uses the Sunday morning ones. If that file is already there, the old copy goes to the Drive trash. **Download** saves the same PDF to your computer.
 
 Reopening the same Sunday later shows what you saved: your picks, added items, and songs left out. If you add PDFs to Song PDFs while the page is open, click **Re-read Drive**. Otherwise the page checks Drive for new files every six hours.
 
 A few publishers lock their PDFs against changes. The page can't copy those pages directly, so it puts them in as high-quality pictures instead. They print the same, but you can't select their text.
+
+The page's memory is kept in the Sheet script's **Script Properties**: one `pick|…` entry per song (the PDF, and pages, picked for it) and one `packet|…` entry per saved packet (packets older than 120 days are forgotten on their own). Leave those alone; deleting a `pick|` entry only means that song's PDF isn't checked for you next time. PDFs over 15 MB (such as whole hymnals) are left off the choices.
+
+## Music leader guide
+
+`leader-guide.html` is a step-by-step guide for whoever leads music: **Prepare a Sunday** (builder, Save PDF, song packet, team email, printing) and **Plan two months** (adding month tabs, names, songs, and notes in the Sheet). The **Help** links in the builder and on the song packet page open it, or go to <https://davidluttrull.github.io/grace-music/leader-guide.html>. It doesn't use the script, so there's nothing to set up. When a step in the builder or song packet page changes, update the guide too.
