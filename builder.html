@@ -67,8 +67,11 @@
   .items { list-style: none; margin: 0; padding: 0; }
   .item { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 6px 6px 2px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--card); }
   .item.off { opacity: .45; }
-  .item.drop-before { box-shadow: 0 -3px 0 var(--brand); }
-  .item.drop-after { box-shadow: 0 3px 0 var(--brand); }
+  /* Where a dragged item will land: one line centered in the gap between two items. */
+  .item { position: relative; }
+  .item.drop-before::before, .item.drop-end::after { content: ''; position: absolute; left: 4px; right: 4px; height: 3px; border-radius: 2px; background: var(--brand); pointer-events: none; }
+  .item.drop-before::before { top: -5.5px; }
+  .item.drop-end::after { bottom: -5.5px; }
   .item.dragging { opacity: .3; }
   .handle { grid-row: span 2; align-self: stretch; display: flex; align-items: center; justify-content: center; cursor: grab; color: #9aa59a; font-size: 16px; user-select: none; }
   .row1, .row2 { display: flex; gap: 6px; min-width: 0; }
@@ -202,7 +205,7 @@
     <span class="spacer"></span>
     <span class="status" id="status"></span>
     <button type="button" class="btn" id="saveBtn">Save</button>
-    <button type="button" class="btn" id="pdfBtn" title="Downloads one copy at its own size, to email as an attachment">Save PDF</button>
+    <button type="button" class="btn" id="pdfBtn" title="Saves one copy at its own size into Orders of Service in Drive, for the team email">Save PDF</button>
     <button type="button" class="btn primary" id="printBtn">Print</button>
     <a class="btn" id="packetLink" href="packet.html" title="Pick the song PDFs and combine them into one">Song packet</a>
     <a class="help" href="leader-guide.html" target="_blank" rel="noopener">Help</a>
@@ -741,20 +744,32 @@
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', '');
   });
+  // The gap the pointer is nearest: before item i, or after the last one (i = number of items).
+  function dropGap(list, y) {
+    const rows = [...list.querySelectorAll(':scope > .item')];
+    const i = rows.findIndex((row) => { const r = row.getBoundingClientRect(); return y < r.top + r.height / 2; });
+    return { rows, gap: i < 0 ? rows.length : i };
+  }
+  const clearDrop = () => document.querySelectorAll('.drop-before, .drop-end').forEach((x) => x.classList.remove('drop-before', 'drop-end'));
   $('#editor').addEventListener('dragover', (e) => {
-    const li = e.target.closest('.item');
-    if (!drag || !li || partOf(li) !== drag.part) return;
+    const list = e.target.closest('.items');
+    if (!drag || !list || partOf(list) !== drag.part) return;
     e.preventDefault();
-    document.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after'));
-    const r = li.getBoundingClientRect();
-    li.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-before' : 'drop-after');
+    clearDrop();
+    const { rows, gap } = dropGap(list, e.clientY);
+    drag.to = gap;
+    if (gap === drag.from || gap === drag.from + 1) return;   // right where it already is
+    if (gap < rows.length) rows[gap].classList.add('drop-before');
+    else rows[rows.length - 1].classList.add('drop-end');
   });
   $('#editor').addEventListener('drop', (e) => {
-    const li = e.target.closest('.item');
-    if (!drag || !li || partOf(li) !== drag.part) return;
+    const list = e.target.closest('.items');
+    if (!drag || !list || partOf(list) !== drag.part) return;
     e.preventDefault();
+    clearDrop();
     const items = drag.part.order.items;
-    let to = Number(li.dataset.i) + (li.classList.contains('drop-after') ? 1 : 0);
+    let to = drag.to === undefined ? dropGap(list, e.clientY).gap : drag.to;
+    if (to === drag.from || to === drag.from + 1) { drag = null; return; }
     const [moved] = items.splice(drag.from, 1);
     if (drag.from < to) to--;
     items.splice(to, 0, moved);
@@ -764,7 +779,7 @@
     changed(part);
   });
   $('#editor').addEventListener('dragend', () => {
-    document.querySelectorAll('.item').forEach((x) => { x.draggable = false; x.classList.remove('dragging', 'drop-before', 'drop-after'); });
+    document.querySelectorAll('.item').forEach((x) => { x.draggable = false; x.classList.remove('dragging', 'drop-before', 'drop-end'); });
     drag = null;
   });
 
@@ -952,18 +967,36 @@
       holder.remove();
     }
   }
+  // Saves the PDF straight into Drive: Orders of Service / 2026 / 11_November, where the weekly
+  // email looks for it. If that doesn't work, the PDF downloads instead so nothing is lost.
   async function savePdf() {
     const btn = $('#pdfBtn');
+    const name = pdfName() + '.pdf';
+    let doc = null;
     btn.disabled = true;
-    btn.textContent = 'Making PDF…';
+    btn.textContent = 'Saving PDF…';
     try {
-      (await makePdf()).save(pdfName() + '.pdf');
+      doc = await makePdf();
+      const res = await withCode('saveOrderPdf', { date: sheet[0].svc.date, name, data: doc.output('datauristring').split(',')[1] });
+      if (!res) return;   // the code box was cancelled
+      flashStatus('PDF saved to Drive: Orders of Service › ' + res.folder);
     } catch (err) {
-      alert(err.message);
+      if (doc) {
+        doc.save(name);
+        alert('Couldn’t save the PDF to Drive (' + err.message + ') It was downloaded instead.');
+      } else {
+        alert(err.message);
+      }
     } finally {
       btn.disabled = false;
       btn.textContent = 'Save PDF';
     }
+  }
+  function flashStatus(text) {
+    $('#status').className = 'status';
+    $('#status').textContent = text;
+    clearTimeout(flashStatus.timer);
+    flashStatus.timer = setTimeout(renderStatus, 6000);
   }
   $('#pdfBtn').onclick = savePdf;
   // Ctrl/Cmd+P prints the same two-up sheet.

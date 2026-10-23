@@ -143,7 +143,7 @@ When you click **Make email drafts** in the builder, it makes the drafts for tha
 ### Each week
 
 1. Make the order of service in the builder. In the **Team email** box at the bottom, write your personal note and any extra notes (one per line), then **Save**.
-2. Save the PDF (**Save PDF**) into that month's folder in Orders of Service, and make the song packet on the **Song packet** page (it saves `YYYY-MM-DD_AM.pdf` there for you).
+2. Click **Save PDF** (it saves the PDF into that month's folder in Orders of Service for you), and make the song packet on the **Song packet** page (it saves `YYYY-MM-DD_AM.pdf` there for you).
 3. On Tuesday, once the PDFs are in the folder, click **Make email drafts** in the builder. It saves first, then opens a page that says what was attached.
 4. Open Gmail → Drafts, look both over, and send them.
 
@@ -173,7 +173,7 @@ To change the code, edit **ORDER_CODE** under **Project Settings → Script Prop
 6. The preview shows one copy exactly as it prints. If a week runs long, the text shrinks a little to fit; if it still doesn't fit, the preview says so.
 7. **Save** stores the sheet on the **Orders** tab, so you can finish it later or on another computer. Until you save, changes are kept on the computer you're using.
 8. **Print** prints two, three, or six copies on one landscape letter page; cut them apart. Use Chrome, leave Scale at 100%, and turn off Headers and footers. To keep a PDF for your Drive folder, choose **Save as PDF** as the printer.
-9. **Save PDF** downloads a PDF of one copy, on a page the size of that sheet, for emailing as an attachment. There's no print dialog; it takes a second or two. The file is named like "2026-11-01_Order of Service", the same as the files in your Orders of Service folder. Put it in that week's month folder (Orders of Service → 2026 → 11_November) so the weekly email can attach it. The PDF is a sharp picture of the sheet (about 400 dpi), so it prints cleanly, but its text can't be selected.
+9. **Save PDF** makes a PDF of one copy, on a page the size of that sheet, and saves it straight into Google Drive: **My Drive → Grace → Orders of Service → 2026 → 11_November** (the year and month of that Sunday; a missing month folder is made for you). It's named like "2026-11-01_Order of Service.pdf", which is where the weekly email looks for it. Saving again replaces the older copy (it goes to the Drive trash). It takes a few seconds, and the bar at the top says where it went. If it can't reach Drive, the PDF downloads instead. The PDF is a sharp picture of the sheet (about 400 dpi), so it prints cleanly, but its text can't be selected.
 
 **Cancelling Sunday evening:** check **Cancelled** at the top of the Sunday Evening section and type a reason if you have one ("Thanksgiving Dinner"). The sheet prints "No Service – Thanksgiving Dinner" under Sunday Evening in place of the service. **Save** writes the same text to Sunday PM's Service Notes row in the Sheet, so the Sheet and the volunteer page show the service as cancelled too. It works the other way as well: a Sunday PM note you type in the Sheet that starts with "No Service" or "Cancelled" shows up checked in the builder, with the rest of the note as the reason. Uncheck Cancelled and Save to clear the note and bring the service back; its order is kept.
 

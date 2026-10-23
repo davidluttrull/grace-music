@@ -214,6 +214,7 @@ function doPost(e) {
     if (body && body.action === 'pdfFile') return json_(pdfFile_(body));
     if (body && body.action === 'uploadPdf') return json_(uploadPdf_(body));
     if (body && body.action === 'savePacket') return json_(savePacket_(body));
+    if (body && body.action === 'saveOrderPdf') return json_(saveOrderPdf_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -616,6 +617,36 @@ function savePacket_(body) {
     props.setProperties(keep);
     prunePackets_(props);
     return { status: 'ok', name: name, url: file.getUrl(), replaced: replaced };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * POST {action: 'saveOrderPdf', code, date, name, data}: the builder's Save PDF.
+ * Puts the order of service in Orders of Service / 2026 / 11_November as
+ * "2026-11-01_Order of Service.pdf" (or "2026-11-04_Wednesday Order of
+ * Service.pdf"), where the weekly email looks for it. An older file with that
+ * name goes to the Drive trash.
+ */
+function saveOrderPdf_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const date = packetDate_(body.date);
+  const name = String(body.name || '');
+  if (name.slice(0, 11) !== date + '_' || !/^\d{4}-\d{2}-\d{2}_[A-Za-z0-9 '&-]{0,40}Order of Service\.pdf$/.test(name)) {
+    throw new Error('That file name doesn’t look right. Reload the page and try again.');
+  }
+  const bytes = pdfBytes_(body.data, MAX_PDF_BYTES);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const folder = monthFolder_(date, true);
+    const old = folder.getFilesByName(name);
+    let replaced = 0;
+    while (old.hasNext()) { old.next().setTrashed(true); replaced++; }
+    const file = folder.createFile(Utilities.newBlob(bytes, 'application/pdf', name));
+    return { status: 'ok', name: name, url: file.getUrl(), folder: date.slice(0, 4) + ' › ' + folder.getName(), replaced: replaced };
   } finally {
     lock.releaseLock();
   }
