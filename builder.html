@@ -67,6 +67,7 @@
   .items { list-style: none; margin: 0; padding: 0; }
   .item { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 6px 6px 2px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--card); }
   .item.off { opacity: .45; }
+  .item .arrange { grid-column: 2 / -1; width: 100%; min-height: 34px; border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 13px; color: var(--ink); resize: vertical; }
   /* Where a dragged item will land: one line centered in the gap between two items. */
   .item { position: relative; }
   .item.drop-before::before, .item.drop-end::after { content: ''; position: absolute; left: 4px; right: 4px; height: 3px; border-radius: 2px; background: var(--brand); pointer-events: none; }
@@ -112,6 +113,8 @@
   .paper-wrap { background: #d9dfd5; border-radius: 12px; padding: 14px; overflow: hidden; }
   .paper-scale { transform-origin: top left; }
   .paper { width: fit-content; height: fit-content; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+  .papers { display: flex; gap: 0.25in; align-items: flex-start; }
+  .side-label { font: 600 13px/1 'Poppins', system-ui, sans-serif; color: var(--muted); margin: 0 0 6px 2px; }
 
   /* ---------- The half sheet (screen preview and print) ---------- */
   .half { width: 5.5in; height: 8.5in; padding: 0.38in 0.42in 0.3in; display: flex; flex-direction: column; color: #000; font-family: 'Source Sans 3', 'Segoe UI', sans-serif; }
@@ -130,6 +133,8 @@
   .num { display: inline-block; min-width: 1.7em; padding: 0 .25em; margin-right: .3em; border: .6pt solid #555; border-radius: 3px; font-style: normal; font-weight: 600; font-size: .85em; text-align: center; line-height: 1.3; }
   .new { display: inline-block; padding: 0 .25em; margin-right: .3em; border: .6pt solid #000; border-radius: 3px; font-style: normal; font-weight: 700; font-size: .72em; letter-spacing: .04em; vertical-align: .1em; }
   .vv { font-style: normal; font-weight: 400; color: #555; font-size: .85em; margin-left: .2em; }
+  /* Two-sided sheet: how a song is played, under its line. */
+  .arr { font-size: .76em; line-height: 1.28; margin: 0 0 .32em .9em; white-space: pre-line; color: #000; }
   /* Team credits: label, name, label, name. The labels get a fixed width (sized to
      E. GUITAR and SOPRANO) so names line up across groups and services. */
   .credits {
@@ -181,6 +186,10 @@
     body > *:not(#printArea) { display: none !important; }
     #printArea { display: flex !important; flex-wrap: wrap; align-content: flex-start; width: 11in; height: 8.5in; }
     #printArea .half { break-inside: avoid; }
+    /* Two-sided: a page of fronts, then a page of backs. */
+    #printArea.pages { display: block !important; height: auto; }
+    #printArea .print-page { display: flex; width: 11in; height: 8.5in; overflow: hidden; break-after: page; }
+    #printArea .print-page:last-child { break-after: auto; }
   }
 
   dialog { border: 0; border-radius: 14px; padding: 20px; width: min(360px, 92vw); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
@@ -201,6 +210,7 @@
       <option value="third">3 per page (third sheet)</option>
       <option value="half">2 per page (half sheet)</option>
       <option value="sixth">6 per page (Wednesday)</option>
+      <option value="duplex">3 per page, two-sided (evening on the back)</option>
     </select>
     <span class="spacer"></span>
     <span class="status" id="status"></span>
@@ -218,7 +228,7 @@
     </div>
     <div class="preview">
       <div class="preview-head"><span id="printNote"></span><span id="fit"></span></div>
-      <div class="paper-wrap" id="paperWrap"><div class="paper-scale" id="paperScale"><div class="paper"><div class="half" id="half"></div></div></div></div>
+      <div class="paper-wrap" id="paperWrap"><div class="paper-scale" id="paperScale"><div class="papers"><div><div class="side-label" id="frontLabel" hidden>Front</div><div class="paper"><div class="half" id="half"></div></div></div><div id="backSide" hidden><div class="side-label">Back</div><div class="paper"><div class="half" id="halfBack"></div></div></div></div></div></div>
     </div>
   </div>
 
@@ -246,7 +256,15 @@
     half: { width: 5.5, height: 8.5, copies: 2, min: 0.7, cls: '', note: 'two across' },
     third: { width: 11 / 3, height: 8.5, copies: 3, min: 0.6, cls: ' third', note: 'three across' },
     sixth: { width: 11 / 3, height: 4.25, copies: 6, min: 0.6, cls: ' third sixth', note: 'six (three across, two down)' },
+    // Morning on the front with room for how each song is played; evening on the back.
+    duplex: { width: 11 / 3, height: 8.5, copies: 3, min: 0.55, cls: ' third', note: 'three across, two-sided: print with "Two-sided" on and "Flip on short edge"', sides: 2 },
   };
+  // The two-sided layout only splits a sheet that has an evening service and something for the front.
+  const twoSided = () => layout === 'duplex' && sheet.some((p) => p.svc.service === 'Sunday PM') && sheet.some((p) => p.svc.service !== 'Sunday PM');
+  const frontParts = () => (twoSided() ? sheet.filter((p) => p.svc.service !== 'Sunday PM') : sheet);
+  const backParts = () => (twoSided() ? sheet.filter((p) => p.svc.service === 'Sunday PM') : []);
+  // Arrangement notes are typed and printed only with the two-sided layout, for songs on the front.
+  const showsArrangement = (svc) => layout === 'duplex' && svc.service !== 'Sunday PM';
   // Wednesday sheets remember their own size, starting at 6 per page; everything else starts at 3.
   const isWednesdaySheet = () => sheet.length > 0 && sheet.every((p) => p.svc.service === 'Wednesday');
   const layoutKey = () => LAYOUT_KEY + (isWednesdaySheet() ? '|wed' : '');
@@ -561,7 +579,7 @@
         '<span class="sub">' + (part.custom
           ? 'Not linked to the schedule. Type in the songs, and the team at the bottom; blank lines are left off. Drag ⠿ to reorder.'
           : 'Gray text comes from the schedule; type over it to change just this sheet. Drag ⠿ to reorder.') + '</span></div>' +
-        '<div class="panel-body"><ol class="items">' + part.order.items.map((it, i) => itemRow(it, i, svc)).join('') + '</ol>' +
+        '<div class="panel-body"><ol class="items">' + part.order.items.map((it, i) => itemRow(it, i, svc, showsArrangement(svc))).join('') + '</ol>' +
         '<div class="add-row"><select data-act="addType" aria-label="Item to add">' +
         Object.keys(PRESETS).map((k) => '<option>' + esc(k) + '</option>').join('') +
         '</select><button type="button" class="btn small" data-act="add">Add</button></div>' +
@@ -656,7 +674,7 @@
   }
   const looksLinked = (it, svc) => !!it.source && !it.value && (!svc.custom || isTeamRole(svc, it.source));
 
-  function itemRow(it, i, svc) {
+  function itemRow(it, i, svc, arrange) {
     const placeholder = placeholderFor(it, svc);
     return '<li class="item' + (it.hidden ? ' off' : '') + '" data-i="' + i + '">' +
       '<span class="handle" title="Drag to move" aria-hidden="true">⠿</span>' +
@@ -667,7 +685,9 @@
       '<div class="row2"><input class="value' + (looksLinked(it, svc) ? ' linked' : '') + '" data-f="value" value="' + esc(it.value) + '" placeholder="' + esc(placeholder) + '" aria-label="' + (it.kind === 'song' ? 'Song' : 'Person') + '">' +
       (it.kind === 'song' ? '<input class="verses" data-f="verses" value="' + esc(it.verses) + '" placeholder="Verses" aria-label="Verses">' : '') +
       (fromText(it, svc) ? '<span class="from">' + esc(fromText(it, svc)) + '</span>' : '') +
-      '</div></li>';
+      '</div>' +
+      (arrange && it.kind === 'song' ? '<textarea class="arrange" data-f="arrangement" rows="2" placeholder="How it\u2019s played (optional): Verse 1, Chorus, Verse 2, Chorus 2x, Tag\u2026" aria-label="Arrangement">' + esc(it.arrangement || '') + '</textarea>' : '') +
+      '</li>';
   }
 
   function partOf(el) { const p = el.closest('[data-p]'); return p ? sheet[Number(p.dataset.p)] : null; }
@@ -806,7 +826,9 @@
     const value = shown(it, svc);
     const left = esc(it.label) + (it.note ? ' · ' + (noteItalic(it) ? '<i>' + esc(it.note) + '</i>' : esc(it.note)) : '');
     const right = it.kind === 'song' ? songHtml(value, it.verses) : esc(value);
-    return '<div class="ln"><span class="l">' + left + '</span><span class="r">' + right + '</span></div>';
+    const arrangement = it.kind === 'song' && showsArrangement(svc) ? String(it.arrangement || '').trim() : '';
+    return '<div class="ln"><span class="l">' + left + '</span><span class="r">' + right + '</span></div>' +
+      (arrangement ? '<div class="arr">' + esc(arrangement) + '</div>' : '');
   }
 
   // Two pairs per line; the second pair's label gets extra space before it.
@@ -848,8 +870,8 @@
     return parts.join(' · ');
   }
 
-  function halfHtml() {
-    const body = sheet.map((part) => {
+  function halfHtml(parts) {
+    const body = (parts || sheet).map((part) => {
       const svc = part.svc;
       const leader = leaderOf(part);
       if (CANCELLABLE.includes(svc.service) && partOff(part)) {
@@ -879,10 +901,21 @@
 
   let lastFit = { s: 1, fits: true };
   function renderPreview() {
+    const cls = 'half' + LAYOUTS[layout].cls + (isWednesdaySheet() ? ' wed' : '');
     const half = $('#half');
-    half.className = 'half' + LAYOUTS[layout].cls + (isWednesdaySheet() ? ' wed' : '');
-    half.innerHTML = halfHtml();
+    half.className = cls;
+    half.innerHTML = halfHtml(frontParts());
     lastFit = fit(half);
+    const two = twoSided();
+    $('#backSide').hidden = !two;
+    $('#frontLabel').hidden = !two;
+    if (two) {
+      const back = $('#halfBack');
+      back.className = cls;
+      back.innerHTML = halfHtml(backParts());
+      const b = fit(back);
+      lastFit = { s: Math.min(lastFit.s, b.s), fits: lastFit.fits && b.fits };
+    }
     $('#fit').innerHTML = !lastFit.fits ? '<span class="fit-warn">Too long to fit. Leave something off.</span>'
       : lastFit.s < 1 ? 'Text shrunk to ' + Math.round(lastFit.s * 100) + '% to fit' : '';
     scalePreview();
@@ -890,18 +923,31 @@
 
   function scalePreview() {
     const wrap = $('#paperWrap');
-    const w = LAYOUTS[layout].width * 96;
+    const two = twoSided();
+    const w = LAYOUTS[layout].width * 96 * (two ? 2 : 1) + (two ? 24 : 0);
+    const h = LAYOUTS[layout].height * 96 + (two ? 19 : 0);
     const k = Math.min(1, (wrap.clientWidth - 28) / w);
     $('#paperScale').style.transform = 'scale(' + k + ')';
-    $('#paperScale').style.height = (LAYOUTS[layout].height * 96 * k) + 'px';
+    $('#paperScale').style.height = (h * k) + 'px';
     $('#paperScale').style.width = (w * k) + 'px';
   }
   window.addEventListener('resize', scalePreview);
 
-  const printCopies = () => $('#half').outerHTML.replace(' id="half"', '').repeat(LAYOUTS[layout].copies);
+  const copyOf = (el) => el.outerHTML.replace(/ id="[^"]*"/, '');
+  // One page of copies, or for the two-sided layout a page of fronts and then a page of backs.
+  function printCopies() {
+    const n = LAYOUTS[layout].copies;
+    if (!twoSided()) return copyOf($('#half')).repeat(n);
+    return '<div class="print-page">' + copyOf($('#half')).repeat(n) + '</div>' +
+      '<div class="print-page">' + copyOf($('#halfBack')).repeat(n) + '</div>';
+  }
+  function fillPrintArea() {
+    $('#printArea').classList.toggle('pages', twoSided());
+    $('#printArea').innerHTML = printCopies();
+  }
   // Not named print(): a page-level print() replaces window.print and calls itself forever.
   function printSheet() {
-    $('#printArea').innerHTML = printCopies();
+    fillPrintArea();
     window.print();
   }
   $('#printBtn').onclick = printSheet;
@@ -957,22 +1003,28 @@
   async function makePdf() {
     await Promise.all([loadPdfLibs(), document.fonts.ready]);
     const L = LAYOUTS[layout];
-    // Draw a copy at full size, away from the preview's zoom.
+    const sides = twoSided() ? [$('#half'), $('#halfBack')] : [$('#half')];   // one PDF page each
+    // Draw copies at full size, away from the preview's zoom.
     const holder = document.createElement('div');
     holder.style.cssText = 'position:fixed;left:-20000px;top:0;background:#fff';
-    holder.innerHTML = $('#half').outerHTML.replace(' id="half"', '');
-    const copy = holder.firstElementChild;
-    const logo = copy.querySelector('.half-foot img');
+    holder.innerHTML = sides.map(copyOf).join('');
     document.body.appendChild(holder);
     try {
-      if (logo) {
-        logo.style.filter = 'none';
-        logo.src = await blackLogoUrl();
-        await logo.decode().catch(() => {});
+      const logoUrl = await blackLogoUrl();
+      const orientation = L.width > L.height ? 'landscape' : 'portrait';
+      const doc = new window.jspdf.jsPDF({ unit: 'in', format: [L.width, L.height], orientation, compress: true });
+      const copies = [...holder.children];
+      for (let i = 0; i < copies.length; i++) {
+        const logo = copies[i].querySelector('.half-foot img');
+        if (logo) {
+          logo.style.filter = 'none';
+          logo.src = logoUrl;
+          await logo.decode().catch(() => {});
+        }
+        const canvas = await window.html2canvas(copies[i], { scale: PDF_SCALE, backgroundColor: '#ffffff', logging: false });
+        if (i) doc.addPage([L.width, L.height], orientation);
+        doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, L.width, L.height, undefined, 'FAST');
       }
-      const canvas = await window.html2canvas(copy, { scale: PDF_SCALE, backgroundColor: '#ffffff', logging: false });
-      const doc = new window.jspdf.jsPDF({ unit: 'in', format: [L.width, L.height], orientation: L.width > L.height ? 'landscape' : 'portrait', compress: true });
-      doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, L.width, L.height, undefined, 'FAST');
       return doc;
     } finally {
       holder.remove();
@@ -1012,7 +1064,7 @@
   $('#pdfBtn').onclick = savePdf;
   // Ctrl/Cmd+P prints the same two-up sheet.
   window.addEventListener('beforeprint', () => {
-    if (!$('#printArea').innerHTML) $('#printArea').innerHTML = printCopies();
+    if (!$('#printArea').innerHTML) fillPrintArea();
   });
   window.addEventListener('afterprint', () => { $('#printArea').innerHTML = ''; });
 
@@ -1109,7 +1161,7 @@
     if (!confirm('Use this order as the starting point for every new ' + name + ' sheet? Verses and schedule changes are cleared from the default.')) return;
     const items = clone(part.order.items).map((it) => {
       delete it.id;
-      if (it.kind === 'song') { it.verses = ''; if (it.source) it.value = ''; }
+      if (it.kind === 'song') { it.verses = ''; delete it.arrangement; if (it.source) it.value = ''; }
       return it;
     });
     try {
@@ -1136,7 +1188,7 @@
   function setLayout(v) {
     showLayout(v);
     store((s) => s.setItem(layoutKey(), v));
-    if (sheet.length) renderPreview();
+    if (sheet.length) { renderEditor(); renderPreview(); }
   }
   $('#layout').onchange = () => setLayout($('#layout').value);
   showLayout(layout);
