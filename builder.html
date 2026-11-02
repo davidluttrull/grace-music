@@ -1051,6 +1051,8 @@
     // Matches the Orders of Service folder ("2026-10-18_Order of Service"), so the email helper finds it.
     const svc = sheet.length ? sheet[0].svc : null;
     if (!svc) return 'Order of Service';
+    // The two-sided musicians' copy gets its own name, so it doesn't replace the regular one in Drive.
+    if (twoSided()) return svc.date + '_Musicians Order of Service';
     if (svc.service === 'Sunday AM' || svc.service === 'Sunday PM') return svc.date + '_Order of Service';
     return svc.date + '_' + svc.service + ' Order of Service';
   }
