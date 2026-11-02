@@ -67,6 +67,7 @@
   .items { list-style: none; margin: 0; padding: 0; }
   .item { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 6px 6px 2px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--card); }
   .item.off { opacity: .45; }
+  .item .remembered { grid-column: 2 / -1; font-size: 11px; color: var(--brand-mid); margin-top: -2px; }
   .item .arrange { grid-column: 2 / -1; width: 100%; min-height: 34px; border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 13px; color: var(--ink); resize: vertical; }
   /* Where a dragged item will land: one line centered in the gap between two items. */
   .item { position: relative; }
@@ -135,6 +136,9 @@
   .vv { font-style: normal; font-weight: 400; color: #555; font-size: .85em; margin-left: .2em; }
   /* Two-sided sheet: how a song is played, indented under its line with a thin rule on the left. */
   .arr { font-size: .76em; line-height: 1.28; margin: .05em 0 .4em .55em; padding: .05em 0 .05em .5em; border-left: 1.2pt solid #000; white-space: pre-line; color: #000; }
+  /* What the road-map codes mean, at the bottom of the front (only the codes that are used). */
+  .arr-key { font-size: .7em; line-height: 1.3; margin-top: .9em; color: #000; }
+  .arr-key b { font-weight: 700; }
   /* Team credits: label, name, label, name. The labels get a fixed width (sized to
      E. GUITAR and SOPRANO) so names line up across groups and services. */
   .credits {
@@ -399,6 +403,56 @@
     if (isNew) t = t.replace(/^\*?\s*new\s*\*?\s*/i, '');
     const m = /^(\d{1,4})\s+(.+)$/.exec(t);
     return { isNew, num: m ? m[1] : '', title: m ? m[2] : t };
+  }
+
+  // ---------- Remembered arrangements ----------
+  // Saved as "template|Arrangements" on the Orders tab: { songs: { "#46": { text, date }, "holy forever": {...} } }.
+  // A hymn is known by its number, any other song by its title.
+  function songKey(value) {
+    const s = parseSong(value);
+    if (s.num) return '#' + s.num;
+    return s.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+  const rememberedArrangements = () => ((saved.templates.Arrangements || {}).songs || {});
+  // What a song's arrangement box holds: what was typed for this song on this sheet, or else the
+  // arrangement remembered from the last time the song was saved (from = that date).
+  function arrangementOf(it, svc) {
+    const key = songKey(shown(it, svc));
+    if (!key) return { text: '', from: '' };
+    if (it.arrangement !== undefined && (it.arrangementFor === undefined || it.arrangementFor === key)) return { text: it.arrangement, from: '' };
+    const r = rememberedArrangements()[key];
+    return r ? { text: r.text, from: r.date } : { text: '', from: '' };
+  }
+  // Road-map codes and what they mean; the key lists only the ones used. Quoted words ("You will always be...") are skipped.
+  const ROAD_MAP = [[/\bV\d*\b/, 'V', 'verse'], [/\bPC\b/, 'PC', 'pre-chorus'], [/\bC\d*\b/, 'C', 'chorus'], [/\bB\d*\b/, 'B', 'bridge'],
+    [/\bRef\b/, 'Ref', 'refrain'], [/\bInst\b/, 'Inst', 'instrumental']];
+  function roadMapKey(texts) {
+    const plain = texts.join(' ').replace(/"[^"]*"|\u201c[^\u201d]*\u201d/g, ' ');
+    const used = ROAD_MAP.filter(([re]) => re.test(plain));
+    return used.length ? '<div class="arr-key">' + used.map(([, code, word]) => '<b>' + code + '</b> ' + word).join(' \u00b7 ') + '</div>' : '';
+  }
+  // After a save: remember every arrangement typed on this sheet, unless a later Sunday already has one for that song.
+  async function rememberArrangements() {
+    const book = clone(saved.templates.Arrangements || { songs: {} });
+    book.songs = book.songs || {};
+    let changedAny = false;
+    sheet.forEach((part) => {
+      if (part.svc.service === 'Sunday PM') return;
+      part.order.items.forEach((it) => {
+        if (it.kind !== 'song' || it.arrangement === undefined) return;
+        const key = songKey(shown(it, part.svc));
+        const text = String(it.arrangement).trim();
+        if (!key || !text || (it.arrangementFor !== undefined && it.arrangementFor !== key)) return;
+        const old = book.songs[key];
+        if (old && (old.date > part.svc.date || (old.date === part.svc.date && old.text === text))) return;
+        book.songs[key] = { text, date: part.svc.date };
+        changedAny = true;
+      });
+    });
+    if (!changedAny) return;
+    Object.keys(book.songs).sort((a, b) => book.songs[b].date.localeCompare(book.songs[a].date))
+      .slice(300).forEach((k) => { delete book.songs[k]; });   // keeps the Orders tab cell small
+    if (await send('template|Arrangements', book)) saved.templates.Arrangements = book;
   }
 
   // Special, Choir, and Offering details are song titles, so they print in italics. Offering is matched by
@@ -686,8 +740,14 @@
       (it.kind === 'song' ? '<input class="verses" data-f="verses" value="' + esc(it.verses) + '" placeholder="Verses" aria-label="Verses">' : '') +
       (fromText(it, svc) ? '<span class="from">' + esc(fromText(it, svc)) + '</span>' : '') +
       '</div>' +
-      (arrange && it.kind === 'song' ? '<textarea class="arrange" data-f="arrangement" rows="2" placeholder="How it\u2019s played (optional): Verse 1, Chorus, Verse 2, Chorus 2x, Tag\u2026" aria-label="Arrangement">' + esc(it.arrangement || '') + '</textarea>' : '') +
+      (arrange && it.kind === 'song' ? arrangeBox(it, svc) : '') +
       '</li>';
+  }
+
+  function arrangeBox(it, svc) {
+    const a = arrangementOf(it, svc);
+    return '<textarea class="arrange" data-f="arrangement" rows="2" placeholder="How it\u2019s played (optional): V1 \u00b7 C \u00b7 V2 \u00b7 C \u00b7 B 2x \u00b7 Tag" aria-label="Arrangement">' + esc(a.text) + '</textarea>' +
+      (a.from ? '<span class="remembered">Last used ' + esc(fmt(a.from, { month: 'numeric', day: 'numeric' })) + ' \u2014 edit to change it for this Sunday</span>' : '');
   }
 
   function partOf(el) { const p = el.closest('[data-p]'); return p ? sheet[Number(p.dataset.p)] : null; }
@@ -706,6 +766,11 @@
     if (li && e.target.dataset.f) {
       const it = part.order.items[Number(li.dataset.i)];
       it[e.target.dataset.f] = e.target.value;
+      if (e.target.dataset.f === 'arrangement') {
+        it.arrangementFor = songKey(shown(it, part.svc));   // typed for this song; a different song gets its own
+        const note = li.querySelector('.remembered');
+        if (note) note.remove();
+      }
       if (e.target.dataset.f === 'value') {
         e.target.classList.toggle('linked', looksLinked(it, part.svc));
         const from = li.querySelector('.from');
@@ -826,7 +891,7 @@
     const value = shown(it, svc);
     const left = esc(it.label) + (it.note ? ' · ' + (noteItalic(it) ? '<i>' + esc(it.note) + '</i>' : esc(it.note)) : '');
     const right = it.kind === 'song' ? songHtml(value, it.verses) : esc(value);
-    const arrangement = it.kind === 'song' && showsArrangement(svc) ? String(it.arrangement || '').trim() : '';
+    const arrangement = it.kind === 'song' && showsArrangement(svc) ? String(arrangementOf(it, svc).text || '').trim() : '';
     return '<div class="ln"><span class="l">' + left + '</span><span class="r">' + right + '</span></div>' +
       (arrangement ? '<div class="arr">' + esc(arrangement) + '</div>' : '');
   }
@@ -871,6 +936,13 @@
   }
 
   function halfHtml(parts) {
+    const used = [];
+    (parts || sheet).forEach((part) => {
+      if (!showsArrangement(part.svc) || partOff(part)) return;
+      part.order.items.forEach((it) => {
+        if (it.kind === 'song' && prints(it, part.svc)) { const t = String(arrangementOf(it, part.svc).text || '').trim(); if (t) used.push(t); }
+      });
+    });
     const body = (parts || sheet).map((part) => {
       const svc = part.svc;
       const leader = leaderOf(part);
@@ -883,7 +955,7 @@
         (leader ? '<div class="lead">Music Leader: ' + esc(leader) + '</div>' : '') +
         part.order.items.filter((it) => prints(it, svc)).map((it) => lineHtml(it, svc)).join('') +
         (part.order.credits !== false ? creditsHtml(part) : '') + '</section>';
-    }).join('');
+    }).join('') + roadMapKey(used);
     return '<div class="half-body">' + body + '</div><div class="half-foot"><img src="logo.png" alt="Grace Baptist Church"></div>';
   }
 
@@ -1144,6 +1216,7 @@
         part.dirty = false;
         store((s) => s.removeItem(DRAFT_PREFIX + part.key));
       }
+      await rememberArrangements();
       renderDates();
     } catch (err) {
       alert(err.message);
@@ -1161,7 +1234,7 @@
     if (!confirm('Use this order as the starting point for every new ' + name + ' sheet? Verses and schedule changes are cleared from the default.')) return;
     const items = clone(part.order.items).map((it) => {
       delete it.id;
-      if (it.kind === 'song') { it.verses = ''; delete it.arrangement; if (it.source) it.value = ''; }
+      if (it.kind === 'song') { it.verses = ''; delete it.arrangement; delete it.arrangementFor; if (it.source) it.value = ''; }
       return it;
     });
     try {
