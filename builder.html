@@ -67,6 +67,14 @@
   .items { list-style: none; margin: 0; padding: 0; }
   .item { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 6px 6px 2px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--card); }
   .item.off { opacity: .45; }
+  /* Road-map code reference above the editor (two-sided size only). */
+  .codes { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; color: var(--ink); }
+  .codes h2 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .codes dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 3px 14px; margin: 0; }
+  .codes dl div { display: flex; gap: 6px; }
+  .codes dt { font-weight: 700; min-width: 34px; }
+  .codes dd { margin: 0; color: var(--muted); }
+  .codes p { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
   .item .remembered { grid-column: 2 / -1; font-size: 11px; color: var(--brand-mid); margin-top: -2px; }
   .item .arrange { grid-column: 2 / -1; width: 100%; min-height: 34px; border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: 13px; color: var(--ink); resize: vertical; }
   /* Where a dragged item will land: one line centered in the gap between two items. */
@@ -228,6 +236,7 @@
   <div class="layout">
     <div>
       <div id="notice"></div>
+      <div class="codes" id="codes" hidden></div>
       <div id="editor"></div>
     </div>
     <div class="preview">
@@ -426,6 +435,17 @@
   // Road-map codes and what they mean; the key lists only the ones used. Quoted words ("You will always be...") are skipped.
   const ROAD_MAP = [[/\bV\d*\b/, 'V', 'verse'], [/\bPC\b/, 'PC', 'pre-chorus'], [/\bC\d*\b/, 'C', 'chorus'], [/\bB\d*\b/, 'B', 'bridge'],
     [/\bRef\b/, 'Ref', 'refrain'], [/\bInst\b/, 'Inst', 'instrumental']];
+  // The full list for the editor, so the codes are always at hand while typing (the printed key stays short).
+  const CODE_GUIDE = [['V1', 'verse 1 (V2, V3\u2026)'], ['PC', 'pre-chorus'], ['C', 'chorus'], ['B', 'bridge'], ['Ref', 'refrain (hymns)'],
+    ['Inst', 'instrumental'], ['Intro', 'intro'], ['Tag', 'repeat last line'], ['2x', 'play it twice'], ['Out', 'ending']];
+  function renderCodes() {
+    const on = sheet.some((part) => showsArrangement(part.svc) && !partOff(part));
+    $('#codes').hidden = !on;
+    if (!on) return;
+    $('#codes').innerHTML = '<h2>Arrangement codes</h2><dl>' +
+      CODE_GUIDE.map(([code, word]) => '<div><dt>' + esc(code) + '</dt><dd>' + esc(word) + '</dd></div>').join('') + '</dl>' +
+      '<p>Example: V1 \u00b7 C \u00b7 V2 \u00b7 C \u00b7 B 2x \u00b7 C \u00b7 Tag. Put lyrics in quotes ("You will always be\u2026") and they\u2019re left out of the printed key.</p>';
+  }
   function roadMapKey(texts) {
     const plain = texts.join(' ').replace(/"[^"]*"|\u201c[^\u201d]*\u201d/g, ' ');
     const used = ROAD_MAP.filter(([re]) => re.test(plain));
@@ -606,6 +626,7 @@
 
   // ---------- Editor ----------
   function renderEditor() {
+    renderCodes();
     $('#notice').innerHTML = cancelled.map((svc) =>
       '<p class="msg">' + esc(SERVICE_LABEL[svc.service] || svc.service) + ' is cancelled (' + esc(serviceNote(svc)) + '), so it’s left off the sheet.</p>').join('');
     if (!sheet.length) {
