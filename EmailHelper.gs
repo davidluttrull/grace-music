@@ -15,8 +15,10 @@
  * Where everything comes from:
  * - The schedule and saved orders of service: the Music Schedule's public
  *   feed (the same one the volunteer page and builder read).
- * - The PDFs: "YYYY-MM-DD_Order of Service.pdf" and "YYYY-MM-DD_AM.pdf" in the
- *   Orders of Service folder, shared from the school Drive with this account.
+ * - The PDFs: "YYYY-MM-DD_Musicians Order of Service.pdf" (the two-sided copy
+ *   with arrangements; the regular "YYYY-MM-DD_Order of Service.pdf" if there
+ *   isn't one) and "YYYY-MM-DD_AM.pdf" in the Orders of Service folder, shared
+ *   from the school Drive with this account.
  * - The recipients: the "Song Email Lists" sheet that setupEmailHelper makes
  *   in this account's Drive, filled from the last song email in Sent mail.
  */
@@ -136,15 +138,21 @@ function makeDrafts_(sunday, replace) {
   const [feed, orders] = fetchJsonAll_([FEED_URL, FEED_URL + '?orders=1']);   // both at once
   if (feed.status === 'error') throw new Error(feed.message);
   const email = buildEmail_(sunday, feed.services || [], orders.orders || {});
-  const found = findPdfs_(email.attachments);
-  const files = email.attachments.map((name) => ({ name, file: found[name] || null }));
+  const found = findPdfs_(email.attachments.concat(Object.values(email.fallbacks)));
+  // A missing musicians' copy falls back to the regular order of service.
+  const files = email.attachments.map((name) => {
+    const alt = email.fallbacks[name];
+    if (!found[name] && alt && found[alt]) return { name: alt, file: found[alt] };
+    return { name, file: found[name] || null };
+  });
   const blobs = files.filter((f) => f.file).map((f) => f.file.getBlob().setName(f.name));
   const missing = files.filter((f) => !f.file).map((f) => f.name);
   const lists = readLists_().filter((l) => l.length);
   if (!lists.length) throw new Error('The "Song Email Lists" sheet has no addresses.');
 
   const old = existingDrafts_(email.subject);
-  if (old.length && !replace) return { email, made: 0, kept: old.length, missing, lists };
+  const attached = files.filter((f) => f.file).map((f) => f.name);
+  if (old.length && !replace) return { email, made: 0, kept: old.length, missing, attached, lists };
   old.forEach((d) => d.remove());
   const html = email.html + signature_();
   lists.forEach((bcc) => {
@@ -155,7 +163,7 @@ function makeDrafts_(sunday, replace) {
       GmailApp.createDraft(Session.getEffectiveUser().getEmail(), email.subject, email.text, opts);
     }
   });
-  return { email, made: lists.length, kept: 0, missing, lists };
+  return { email, made: lists.length, kept: 0, missing, attached, lists };
 }
 
 function summary_(res) {
@@ -163,14 +171,14 @@ function summary_(res) {
   if (res.made) lines.push('Made ' + res.made + ' drafts of "' + res.email.subject + '" (' + res.lists.map((l) => l.length).join(' + ') + ' people).');
   else lines.push('Drafts of "' + res.email.subject + '" were already made, so they were left alone.');
   if (res.missing.length) lines.push('Not attached (not in the Orders of Service folder yet): ' + res.missing.join(', ') + '.');
-  else lines.push('Attached: ' + res.email.attachments.join(', ') + '.');
+  else lines.push('Attached: ' + res.attached.join(', ') + '.');
   return lines.join('\n');
 }
 
 /**
  * The email for the Sunday `sunday` ("2026-10-18"), from the schedule feed and
  * the saved orders. Returns { subject, text, html, attachments } where
- * attachments are the PDF names to look for.
+ * attachments are the PDF names to look for (fallbacks: a name to use when one is missing).
  */
 function buildEmail_(sunday, services, orders) {
   const week = [0, 7, 14, 21].map((n) => addDays_(sunday, n));
@@ -229,7 +237,8 @@ function buildEmail_(sunday, services, orders) {
     subject: subjectFor_(sunday),
     text,
     html,
-    attachments: [sunday + '_Order of Service.pdf', sunday + '_AM.pdf', week[1] + '_AM.pdf'],
+    attachments: [sunday + '_Musicians Order of Service.pdf', sunday + '_AM.pdf', week[1] + '_AM.pdf'],
+    fallbacks: { [sunday + '_Musicians Order of Service.pdf']: sunday + '_Order of Service.pdf' },
   };
 }
 
