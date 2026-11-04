@@ -256,6 +256,7 @@ function thisSundayNotes_(sunday, svc, order) {
       return;
     }
     let supper = false;
+    const choirs = {};   // one line per choir, however many times it sings
     if (o) {
       o.items.filter((it) => !it.hidden).forEach((it) => {
         const label = String(it.label || '').trim();
@@ -268,7 +269,10 @@ function thisSundayNotes_(sunday, svc, order) {
         }
         if (USUAL_ITEMS.test(label)) return;
         if (/choir/i.test(label)) {
-          notes.push(prefix + 'The choir, led by ' + (value || CHOIR_LEADER) + ', will sing' + (detail ? ' "' + detail + '."' : '.'));
+          const key = label.toLowerCase() + '|' + value.toLowerCase();
+          if (!choirs[key]) choirs[key] = { at: notes.push('') - 1, name: /^choir$/i.test(label) ? 'choir' : label, leader: value || CHOIR_LEADER, times: 0, songs: [] };
+          choirs[key].times++;
+          if (detail) choirs[key].songs.push('"' + detail + '"');
         } else if (/missionary/i.test(label)) {
           notes.push(prefix + (value ? value + ' will give a missionary presentation.' : "We'll have a missionary presentation."));
         } else if (/communion|lord.?s supper/i.test(label)) {
@@ -281,12 +285,19 @@ function thisSundayNotes_(sunday, svc, order) {
         }
       });
     }
+    Object.values(choirs).forEach((c) => {
+      const what = c.songs.length ? ' ' + listOf_(c.songs) : (c.times > 1 ? ' ' + (TIMES[c.times] || c.times + ' times') : '');
+      notes[c.at] = prefix + 'The ' + c.name + ', led by ' + c.leader + ', will sing' + (what.endsWith('"') ? what.slice(0, -1) + '."' : what + '.');
+    });
     if (note && !supper) {
       notes.push(/lord.?s supper|communion/i.test(note) ? prefix + "We'll take the Lord's Supper." : (prefix || 'Sunday morning: ') + note + '.');
     }
   });
-  return notes;
+  return notes.filter((n, i) => n && notes.indexOf(n) === i);   // no line twice
 }
+
+const TIMES = { 2: 'twice', 3: 'three times', 4: 'four times' };
+const listOf_ = (a) => (a.length < 3 ? a.join(' and ') : a.slice(0, -1).join(', ') + ', and ' + a[a.length - 1]);
 
 /** "Lord's Supper" next to a week's heading, from its Service Notes. */
 function aboutService_(s) {
