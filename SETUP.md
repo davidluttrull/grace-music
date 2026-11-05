@@ -156,6 +156,8 @@ When you click **Make email drafts** in the builder, it makes the drafts for tha
 
 The builder link has a private key at the end, stored as **HELPER_KEY** under the Song Email project's **Project Settings → Script Properties** (next to **LISTS_SHEET_ID**, which points to the Song Email Lists sheet). If the link ever gets out, delete **HELPER_KEY**, then run **setupEmailHelper** and **builderLink** again for a new link. On each computer that uses the builder, click **Change email link** in the **Team email** box and paste the new link.
 
+The helper also needs the builder's order code, because the schedule's public feed leaves out your email notes. In the same **Script Properties**, add **ORDER_CODE** with the code the builder asks for when you save.
+
 To have the drafts made automatically every week instead, set `DRAFT_DAY` at the top of `EmailHelper.gs` to a day (`'TUESDAY'`) and run **setupEmailHelper** again. That weekly run leaves drafts alone if they were already made that week, and emails you when they're ready. Set it back to `''` and run **setupEmailHelper** to turn it off. Either way, your lists stay as they are.
 
 ## Order of service builder

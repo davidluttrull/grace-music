@@ -355,6 +355,8 @@
   const $ = (sel) => document.querySelector(sel);
   let services = [];
   let saved = { orders: {}, templates: {} };
+  // The public feed leaves out the team email notes; with the order code they're loaded too.
+  let emailLocked = false;
   let sheet = [];      // [{ svc, key, order, dirty }] for the chosen date
   let cancelled = [];  // services on the chosen date that are cancelled
   let uid = 0;
@@ -673,16 +675,38 @@
     const part = emailPart();
     if (!part) return '';
     const email = part.order.email || {};
+    const fields = emailLocked && part.order.email === undefined
+      ? '<p class="reason">The team email notes are private. <button type="button" class="btn small" id="emailUnlockBtn">Enter code to see them</button></p>'
+      : '<label class="reason">Personal note (goes after “Good afternoon,”)<textarea data-email="intro" rows="2" placeholder="Hope you’ve had a great week!">' + esc(email.intro || '') + '</textarea></label>' +
+        '<label class="reason" style="margin-top:8px">Extra notes, one per line (added under Notes)<textarea data-email="notes" rows="3" placeholder="Kristen Baisley will play piano for the Lord’s Supper.">' + esc(email.notes || '') + '</textarea></label>';
     return '<section class="panel email-panel">' +
       '<div class="panel-head"><h2>Team email</h2>' +
       '<button type="button" class="btn small" id="emailBtn">Make email drafts</button>' +
       '<button type="button" class="btn small" id="emailLinkBtn">Change email link</button>' +
       '<span class="sub">Make email drafts saves this Sunday, then makes the two Gmail drafts from it, with the PDFs attached ' +
       '(replacing any already made for this Sunday).</span></div>' +
-      '<div class="panel-body">' +
-      '<label class="reason">Personal note (goes after “Good afternoon,”)<textarea data-email="intro" rows="2" placeholder="Hope you’ve had a great week!">' + esc(email.intro || '') + '</textarea></label>' +
-      '<label class="reason" style="margin-top:8px">Extra notes, one per line (added under Notes)<textarea data-email="notes" rows="3" placeholder="Kristen Baisley will play piano for the Lord’s Supper.">' + esc(email.notes || '') + '</textarea></label>' +
-      '</div></section>';
+      '<div class="panel-body">' + fields + '</div></section>';
+  }
+
+  // Puts the team email notes from a code-protected load back into the saved orders and the
+  // services on screen (an order on screen keeps notes already typed into it).
+  function mergeEmails(orders) {
+    Object.keys(orders || {}).forEach((key) => {
+      if (saved.orders[key] && orders[key] && orders[key].email) saved.orders[key].email = orders[key].email;
+    });
+    sheet.forEach((part) => {
+      const from = (orders || {})[part.moveFrom || part.key];
+      if (part.order.email === undefined && from && from.email) part.order.email = clone(from.email);
+    });
+    emailLocked = false;
+  }
+
+  // Asks for the code (if this computer doesn't know it yet) and loads the team email notes.
+  async function unlockEmail() {
+    const res = await withCode('orders', {});
+    if (!res) return false;
+    mergeEmails(res.orders);
+    return true;
   }
 
   // Asks for the email helper link and remembers it on this computer. Returns
@@ -718,6 +742,9 @@
   });
   $('#editor').addEventListener('click', (e) => {
     if (e.target.id === 'emailBtn') makeEmailDrafts();
+    if (e.target.id === 'emailUnlockBtn') {
+      unlockEmail().then((ok) => { if (ok) renderEditor(); }).catch((err) => alert(err.message));
+    }
     if (e.target.id === 'emailLinkBtn') {
       const before = store((s) => s.getItem(EMAIL_LINK_KEY)) || '';
       const link = askEmailLink(before);
@@ -1218,6 +1245,9 @@
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
+      // Saving needs the code anyway, so load the hidden email notes first and save them back
+      // unchanged (the Sheet also keeps them if an order arrives without them).
+      if (emailLocked && !(await unlockEmail())) return;
       for (const part of sheet) {
         // A Cancelled change goes to the Service Notes row first.
         if (!part.custom && part.order.pendingNote !== undefined) {
@@ -1289,16 +1319,30 @@
   $('#layout').onchange = () => setLayout($('#layout').value);
   showLayout(layout);
 
+  // The saved orders: with the team email notes when this computer knows the code, else the public copy.
+  async function loadOrders() {
+    const code = store((s) => s.getItem(CODE_KEY));
+    if (code) {
+      try {
+        const res = await post({ action: 'orders', code });
+        if (res.status === 'badcode') store((s) => s.removeItem(CODE_KEY));
+        else if (res.orders) return res;
+      } catch (err) { /* fall back to the public copy */ }
+    }
+    return fetch(API_URL + '?orders=1', { cache: 'no-store' }).then((r) => r.json());
+  }
+
   async function start() {
     $('#status').textContent = 'Loading…';
     try {
       const [feed, orders] = await Promise.all([
         fetch(API_URL, { cache: 'no-store' }).then((r) => r.json()),
-        fetch(API_URL + '?orders=1', { cache: 'no-store' }).then((r) => r.json()),
+        loadOrders(),
       ]);
       if (feed.status === 'error') throw new Error(feed.message);
       services = feed.services || [];
       saved = { orders: orders.orders || {}, templates: orders.templates || {} };
+      emailLocked = !!orders.emailHidden;
     } catch (err) {
       $('#notice').innerHTML = '<p class="msg error">Couldn’t load the schedule: ' + esc(err.message) + '</p>';
       $('#status').textContent = '';

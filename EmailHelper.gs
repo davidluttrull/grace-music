@@ -14,7 +14,9 @@
  *
  * Where everything comes from:
  * - The schedule and saved orders of service: the Music Schedule's public
- *   feed (the same one the volunteer page and builder read).
+ *   feed (the same one the volunteer page and builder read). The orders' team
+ *   email notes aren't public, so this asks for them with the order code,
+ *   stored here as the ORDER_CODE script property (the same code the builder uses).
  * - The PDFs: "YYYY-MM-DD_Musicians Order of Service.pdf" (the two-sided copy
  *   with arrangements; the regular "YYYY-MM-DD_Order of Service.pdf" if there
  *   isn't one) and "YYYY-MM-DD_AM.pdf" in the Orders of Service folder, shared
@@ -30,6 +32,7 @@ const ORDERS_FOLDER = '0B_yrCm_KORazWDBYMUdXX1RrT1E';
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const LISTS_PROP = 'LISTS_SHEET_ID';
 const KEY_PROP = 'HELPER_KEY';
+const ORDER_CODE_PROP = 'ORDER_CODE';   // the builder's order code, to read the team email notes
 const DRAFT_DAY = '';                 // '' = only when the builder's button is clicked; 'TUESDAY' = also every Tuesday
 const DRAFT_HOUR = 12;                // the weekly run's hour, if DRAFT_DAY is set
 const CHOIR_LEADER = 'Kevin Plew';    // leads the choir unless the order says otherwise
@@ -135,8 +138,17 @@ function doGet(e) {
 // ---------- Making the drafts ----------
 
 function makeDrafts_(sunday, replace) {
-  const [feed, orders] = fetchJsonAll_([FEED_URL, FEED_URL + '?orders=1']);   // both at once
+  const code = PropertiesService.getScriptProperties().getProperty(ORDER_CODE_PROP);
+  if (!code) {
+    throw new Error('Add the order code as ORDER_CODE in this project\'s Project Settings \u2192 Script Properties ' +
+      '(the same code the builder asks for), so the drafts can include your notes.');
+  }
+  const ordersRequest = { url: FEED_URL, method: 'post', contentType: 'text/plain',
+    payload: JSON.stringify({ action: 'orders', code: code }) };
+  const [feed, orders] = fetchJsonAll_([FEED_URL, ordersRequest]);   // both at once
   if (feed.status === 'error') throw new Error(feed.message);
+  if (orders.status === 'badcode') throw new Error('The ORDER_CODE script property isn\u2019t the builder\u2019s order code. Fix it and try again.');
+  if (orders.status === 'error') throw new Error(orders.message);
   const email = buildEmail_(sunday, feed.services || [], orders.orders || {});
   const found = findPdfs_(email.attachments.concat(Object.values(email.fallbacks)));
   // A missing musicians' copy falls back to the regular order of service.
@@ -321,6 +333,7 @@ function valueOf_(s, role) {
 // Right after the Music Schedule script is deployed, Google can answer 404 for a minute,
 // so try a few times before giving up.
 /** Fetches several feed URLs at the same time; any that fail are tried again. Returns their JSON in order. */
+/** GETs or POSTs several requests at once (a URL, or {url, method, payload, ...}), trying again on a hiccup. */
 function fetchJsonAll_(urls) {
   const out = urls.map(() => undefined);
   let code = 0;
@@ -328,7 +341,8 @@ function fetchJsonAll_(urls) {
     const todo = urls.map((u, i) => i).filter((i) => out[i] === undefined);
     if (!todo.length) break;
     if (attempt) Utilities.sleep(3000 * attempt);
-    const replies = UrlFetchApp.fetchAll(todo.map((i) => ({ url: urls[i], muteHttpExceptions: true, followRedirects: true })));
+    const replies = UrlFetchApp.fetchAll(todo.map((i) => Object.assign(
+      typeof urls[i] === 'string' ? { url: urls[i] } : urls[i], { muteHttpExceptions: true, followRedirects: true })));
     replies.forEach((res, k) => {
       const c = res.getResponseCode();
       if (c !== 200) { code = c; return; }

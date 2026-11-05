@@ -20,10 +20,13 @@
  *
  * The order of service builder (builder.html) reads saved orders with
  * doGet?orders=1 and saves them with doPost. Saving needs the ORDER_CODE
- * script property, which setupOrderCode creates. Orders live on the Orders
- * tab, one row per service ("2026-11-01|Sunday AM") or default
- * ("template|Sunday AM"), as JSON. The builder's Cancelled switch writes a
- * service's Service Notes cell (setNote), with the same code.
+ * script property, which setupOrderCode creates. The public doGet?orders=1
+ * leaves out each order's team email notes (order.email); doPost
+ * {action: 'orders', code} returns them, for the builder and the email
+ * helper. Orders live on the Orders tab, one row per service
+ * ("2026-11-01|Sunday AM") or default ("template|Sunday AM"), as JSON. The
+ * builder's Cancelled switch writes a service's Service Notes cell (setNote),
+ * with the same code.
  *
  * It also adds a Music Schedule menu to the Sheet: one item puts the rotation
  * formulas back in selected cells, another builds the next month's tab, and
@@ -89,7 +92,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 /** GET: upcoming services, oldest first. With ?orders=1, the saved orders of service instead. */
 function doGet(e) {
   try {
-    if (e && e.parameter && e.parameter.orders) return json_(savedOrders_());
+    if (e && e.parameter && e.parameter.orders) return json_(savedOrders_(false));
     return json_({ services: upcomingServices_(), rotation: rotation_(), updated: new Date().toISOString() });
   } catch (err) {
     return json_({ status: 'error', message: 'The schedule couldn’t be read. ' + err.message });
@@ -208,6 +211,7 @@ function doPost(e) {
     return json_({ status: 'error', message: 'That request didn’t make sense. Reload the page and try again.' });
   }
   try {
+    if (body && body.action === 'orders') return json_(privateOrders_(body));
     if (body && body.action === 'saveOrder') return json_(saveOrder_(body));
     if (body && body.action === 'setNote') return json_(setServiceNote_(body));
     if (body && body.action === 'packetSetup') return json_(packetSetup_(body));
@@ -381,10 +385,15 @@ function clean_(s) {
 
 // ---------- Orders of service ----------
 
-/** Saved orders from two weeks back on, and the default orders, keyed like the Orders tab. */
-function savedOrders_() {
+/**
+ * Saved orders from two weeks back on, and the default orders, keyed like the Orders tab.
+ * The team email notes (order.email) are personal, so they're only included with the
+ * order code (withEmail); the public feed says emailHidden instead.
+ */
+function savedOrders_(withEmail) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ORDERS_SHEET);
   const out = { orders: {}, templates: {} };
+  if (!withEmail) out.emailHidden = true;
   if (!sheet || sheet.getLastRow() < 2) return out;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - ORDER_DAYS_BACK);
@@ -393,20 +402,31 @@ function savedOrders_() {
     const key = String(row[0]);
     let order;
     try { order = JSON.parse(row[2]); } catch (err) { return; }
+    if (!withEmail && order) delete order.email;
     if (key.indexOf('template|') === 0) out.templates[key.slice(9)] = order;
     else if (key.slice(0, 10) >= fromKey) out.orders[key] = order;
   });
   return out;
 }
 
-/** POST {action: 'saveOrder', code, key, order}. A null order deletes the saved one. */
+/** POST {action: 'orders', code}: the saved orders with their team email notes. */
+function privateOrders_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  return savedOrders_(true);
+}
+
+/**
+ * POST {action: 'saveOrder', code, key, order}. A null order deletes the saved one.
+ * An order sent without an email field keeps the saved one's team email notes, so a
+ * builder that loaded the public feed (which leaves them out) can't erase them.
+ */
 function saveOrder_(body) {
   const refused = checkOrderCode_(body.code);
   if (refused) return refused;
   const key = String(body.key || '');
   if (!/^(\d{4}-\d{2}-\d{2}|template)\|[^|]{1,60}$/.test(key)) throw new Error('That order can’t be saved. Reload the page and try again.');
-  const json = body.order == null ? '' : JSON.stringify(body.order);
-  if (json.length > MAX_ORDER_CHARS) throw new Error('That order is too long to save.');
+  if (body.order != null && JSON.stringify(body.order).length > MAX_ORDER_CHARS) throw new Error('That order is too long to save.');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -422,6 +442,14 @@ function saveOrder_(body) {
     const last = sheet.getLastRow();
     const keys = last > 1 ? sheet.getRange(2, 1, last - 1, 1).getValues().map((r) => String(r[0])) : [];
     const i = keys.indexOf(key);
+    const order = body.order;
+    if (order != null && order.email === undefined && i >= 0) {
+      try {
+        const before = JSON.parse(sheet.getRange(i + 2, 3).getValue());
+        if (before && before.email) order.email = before.email;
+      } catch (err) { /* nothing to keep */ }
+    }
+    const json = order == null ? '' : JSON.stringify(order);
     if (!json) {
       if (i >= 0) sheet.deleteRow(i + 2);
     } else if (i >= 0) {
