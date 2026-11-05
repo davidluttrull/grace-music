@@ -149,7 +149,7 @@ function makeDrafts_(sunday, replace) {
   if (feed.status === 'error') throw new Error(feed.message);
   if (orders.status === 'badcode') throw new Error('The ORDER_CODE script property isn\u2019t the builder\u2019s order code. Fix it and try again.');
   if (orders.status === 'error') throw new Error(orders.message);
-  const email = buildEmail_(sunday, feed.services || [], orders.orders || {});
+  const email = buildEmail_(sunday, feed.services || [], orders.orders || {}, orders.templates || {});
   const found = findPdfs_(email.attachments.concat(Object.values(email.fallbacks)));
   // A missing musicians' copy falls back to the regular order of service.
   const files = email.attachments.map((name) => {
@@ -189,10 +189,10 @@ function summary_(res) {
 
 /**
  * The email for the Sunday `sunday` ("2026-10-18"), from the schedule feed and
- * the saved orders. Returns { subject, text, html, attachments } where
+ * the saved orders (templates: for the remembered song arrangements). Returns { subject, text, html, attachments } where
  * attachments are the PDF names to look for (fallbacks: a name to use when one is missing).
  */
-function buildEmail_(sunday, services, orders) {
+function buildEmail_(sunday, services, orders, templates) {
   const week = [0, 7, 14, 21].map((n) => addDays_(sunday, n));
   const svc = (date, service) => services.find((s) => s.date === date && s.service === service) || null;
   const order = (date, service) => orders[date + '|' + service] || orders[date + '|Custom ' + service] || null;
@@ -220,11 +220,25 @@ function buildEmail_(sunday, services, orders) {
 
   const greeting = 'Good afternoon,';
   const intro = (email.intro || '').trim() || "Hope you've had a great week!";
-  const attachSentence = 'Attached is the order of service for this Sunday and the song scans for the next two Sundays.';
+  const sections = orderSections_(sunday, svc, order, ((templates || {}).Arrangements || {}).songs || {});
+  const attachSentence = sections.length
+    ? "This Sunday's order of service is below (and attached, if you'd like to print it), along with the song scans for the next two Sundays."
+    : 'Attached is the order of service for this Sunday and the song scans for the next two Sundays.';
 
   // Plain text
   let text = greeting + '\n\n' + intro + ' ' + attachSentence + '\n\nNotes:\n' +
-    notes.map((n) => '- ' + n).join('\n') + '\n\nI think that covers everything!\n';
+    notes.map((n) => '- ' + n).join('\n') + '\n';
+  sections.forEach((sec) => {
+    text += '\n' + sec.title.toUpperCase() + (sec.right ? ' - ' + sec.right : '') + '\n';
+    if (sec.off) text += sec.off + '\n';
+    if (sec.leader) text += 'Music Leader: ' + sec.leader + '\n';
+    sec.lines.forEach((l) => {
+      text += l.label + (l.note ? ' (' + l.note + ')' : '') + (l.value ? ': ' + l.value : '') + (l.verses ? ' ' + l.verses : '') + '\n';
+      if (l.arr) text += l.arr.split('\n').map((a) => '    ' + a).join('\n') + '\n';
+    });
+    sec.credits.forEach(([h, list]) => { text += h + ': ' + list.map(([k, v]) => k + ' ' + v).join(', ') + '\n'; });
+  });
+  text += '\nI think that covers everything!\n';
   blocks.forEach((b) => {
     text += '\n' + b.title + (b.extra ? ' - ' + b.extra : '') + '\n';
     if (!b.lines.length && !b.gift.length) { text += 'TBA\n'; return; }
@@ -232,18 +246,36 @@ function buildEmail_(sunday, services, orders) {
     if (b.gift.length) text += b.gift.join('\n') + '\n';
   });
 
-  // HTML, laid out like the emails David writes by hand
-  const div = (s) => '<div>' + s + '</div>';
-  let html = div(esc_(greeting)) + div(esc_(intro) + ' ' + esc_(attachSentence)) + '<br>' + div('Notes:') +
-    '<ul>' + notes.map((n) => '<li>' + esc_(n) + '</li>').join('') + '</ul>' + div('I think that covers everything!');
-  blocks.forEach((b) => {
-    html += '<br>' + div('<b>' + esc_(b.title) + '</b>' + (b.extra ? ' – ' + esc_(b.extra) : ''));
-    if (!b.lines.length && !b.gift.length) { html += div('TBA'); return; }
-    html += b.lines.map((l) => div(esc_(l))).join('');
-    if (b.lines.length && b.gift.length) html += '<br>';
-    html += b.gift.map((l) => div(esc_(l))).join('');
-  });
-  html += '<br>';
+  // HTML in the church's colors (the volunteer page's greens), with inline styles because Gmail drops <style>.
+  const C = EMAIL_COLORS;
+  const card = (inner) => '<tr><td style="padding:0 0 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid ' + C.line + ';border-radius:12px"><tr><td style="padding:16px 20px">' + inner + '</td></tr></table></td></tr>';
+  const h2 = (t, right) => '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid ' + C.brand + ';margin:0 0 8px"><tr>' +
+    '<td style="font-size:17px;font-weight:700;color:' + C.deep + ';padding:0 0 4px">' + esc_(t) + '</td>' +
+    (right ? '<td align="right" style="font-size:12px;color:' + C.muted + ';padding:0 0 4px">' + esc_(right) + '</td>' : '') + '</tr></table>';
+  const p = (inner, extra) => '<p style="margin:0 0 10px;' + (extra || '') + '">' + inner + '</p>';
+
+  let body = card(p(esc_(greeting)) + p(esc_(intro) + ' ' + esc_(attachSentence)) +
+    '<div style="font-weight:700;color:' + C.deep + ';margin:14px 0 4px">Notes</div>' +
+    '<ul style="margin:0;padding:0 0 0 20px">' + notes.map((n) => '<li style="margin:0 0 4px">' + esc_(n) + '</li>').join('') + '</ul>');
+  if (sections.length) {
+    body += card('<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:' + C.mid + ';margin:0 0 10px">THIS SUNDAY\'S ORDER OF SERVICE</div>' +
+      sections.map((sec, k) => '<div style="' + (k ? 'margin-top:18px' : '') + '">' + sectionHtml_(sec) + '</div>').join(''));
+  }
+  body += card(h2('Upcoming Assignments') + blocks.map((b, k) => {
+    let out = '<div style="' + (k ? 'margin-top:14px' : 'margin-top:4px') + '"><div style="font-weight:700;color:' + C.deep + '">' + esc_(b.title) + '</div>' +
+      (b.extra ? '<div style="font-size:13px;color:' + C.mid + ';margin:1px 0 3px">' + esc_(b.extra) + '</div>' : '');
+    if (!b.lines.length && !b.gift.length) return out + '<div style="color:' + C.muted + '">TBA</div></div>';
+    out += b.lines.map((l) => '<div>' + labelled_(l) + '</div>').join('');
+    if (b.lines.length && b.gift.length) out += '<div style="height:6px"></div>';
+    return out + b.gift.map((l) => '<div>' + labelled_(l) + '</div>').join('') + '</div>';
+  }).join('') + p('I think that covers everything!', 'margin:16px 0 0'));
+
+  const html = '<div style="background:' + C.bg + ';padding:16px 8px;font-family:Poppins,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45;color:' + C.ink + '">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto">' +
+    '<tr><td style="padding:0 0 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + C.deep + ';border-radius:12px"><tr><td style="padding:16px 20px">' +
+    '<div style="font-size:12px;font-weight:600;letter-spacing:.08em;color:' + C.brand + '">GRACE BAPTIST CHURCH · MUSIC</div>' +
+    '<div style="font-size:21px;font-weight:700;color:#fff;margin-top:2px">Sunday, ' + esc_(longDate_(sunday)) + '</div>' +
+    '</td></tr></table></td></tr>' + body + '</table></div>';
 
   return {
     subject: subjectFor_(sunday),
@@ -252,6 +284,111 @@ function buildEmail_(sunday, services, orders) {
     attachments: [sunday + '_Musicians Order of Service.pdf', sunday + '_AM.pdf', week[1] + '_AM.pdf'],
     fallbacks: { [sunday + '_Musicians Order of Service.pdf']: sunday + '_Order of Service.pdf' },
   };
+}
+
+const EMAIL_COLORS = { brand: '#7BAE58', deep: '#233617', mid: '#4E7A35', bg: '#F3F8EF', ink: '#1E2A16', muted: '#5B6A50', line: '#DCE7D3' };
+const SERVICE_LABEL = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening' };
+// The team credits under each service, as on the printed sheet: [schedule role, label].
+const CREDIT_GROUPS = [
+  ['Accompanists', [['Piano', 'Piano'], ['Synth', 'Synth'], ['Strings', 'Strings'], ['Guitar', 'Guitar'], ['Electric Guitar', 'E. Guitar'], ['Bass Guitar', 'Bass']]],
+  ['Singers', [['Soprano', 'Soprano'], ['Alto', 'Alto'], ['Tenor', 'Tenor'], ['Bass', 'Bass'], ['Alt (Women)', 'Alt'], ['Alt (Men)', 'Alt']]],
+  ['Media', [['Slides', 'Slides'], ['House Audio', 'House'], ['Livestream Audio', 'Stream'], ['Video Mixer', 'Video']]],
+];
+
+/**
+ * This Sunday's saved orders, ready to show in the email body: [{ title, right, leader, off, lines, credits }].
+ * Works like the builder's sheet: linked items read the schedule, empty ones are left off, and a song shows
+ * its arrangement (typed on that order, or the one remembered from the last time it was sung).
+ * A service with no saved order is skipped (the attachment still has it).
+ */
+function orderSections_(sunday, svc, order, book) {
+  const out = [];
+  ['Sunday AM', 'Sunday PM'].forEach((service) => {
+    const o = order(sunday, service);
+    if (!o || !o.items) return;
+    const s = svc(sunday, service);
+    const role = (r) => (s ? valueOf_(s, r) : ((o.team || {})[r] || ''));
+    const title = SERVICE_LABEL[service];
+    const note = role('Service Notes') || (o.team && o.team['Service Notes']) || '';
+    if (note && CANCELLED.test(note)) { out.push({ title, right: longDate_(sunday), off: note, leader: '', lines: [], credits: [] }); return; }
+    const right = [role('Time'), note].filter(Boolean).join(' · ');
+    const lines = [];
+    o.items.forEach((it) => {
+      const value = String(it.value || (it.source ? role(it.source) : '') || '').trim();
+      if (it.hidden || (it.source && !value)) return;
+      const line = { label: String(it.label || '').trim(), note: String(it.note || '').trim(), value, verses: String(it.verses || '').trim(), song: null, arr: '' };
+      line.italic = it.italic || /^offering\b/i.test(line.label);
+      if (it.kind === 'song') {
+        line.song = parseSong_(value);
+        const key = songKey_(value);
+        if (it.arrangement !== undefined && (it.arrangementFor === undefined || it.arrangementFor === key)) line.arr = String(it.arrangement).trim();
+        else if (service === 'Sunday AM' && key && book[key]) line.arr = String(book[key].text || '').trim();
+      }
+      lines.push(line);
+    });
+    const credits = o.credits === false ? [] : CREDIT_GROUPS.map(([h, roles]) =>
+      [h, roles.map(([r, label]) => [label, role(r)]).filter(([, v]) => v)]).filter(([, list]) => list.length);
+    out.push({ title, right, off: '', leader: role('Leading') || role('Song Leading') || o.leader || '', lines, credits });
+  });
+  return out;
+}
+
+/** One service in the email body, laid out like the printed sheet. */
+function sectionHtml_(sec) {
+  const C = EMAIL_COLORS;
+  let html = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid ' + C.brand + ';margin:0 0 6px"><tr>' +
+    '<td style="font-size:17px;font-weight:700;color:' + C.deep + ';padding:0 0 4px">' + esc_(sec.title) + '</td>' +
+    (sec.right ? '<td align="right" style="font-size:12px;color:' + C.muted + ';padding:0 0 4px">' + esc_(sec.right) + '</td>' : '') + '</tr></table>';
+  if (sec.off) return html + '<div style="font-style:italic;color:' + C.muted + '">' + esc_(sec.off) + '</div>';
+  if (sec.leader) html += '<div style="font-size:13px;font-weight:600;color:' + C.mid + ';margin:0 0 6px">Music Leader: ' + esc_(sec.leader) + '</div>';
+  html += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + sec.lines.map((l) => {
+    const left = esc_(l.label) + (l.note ? ' <span style="color:' + C.ink + '">· ' + (l.italic ? '<i>' + esc_(l.note) + '</i>' : esc_(l.note)) + '</span>' : '');
+    let right = esc_(l.value);
+    if (l.song) {
+      right = '<b><i>' + (l.song.isNew ? '<span style="font-style:normal;font-size:10px;border:1px solid ' + C.ink + ';border-radius:3px;padding:0 3px;margin-right:4px">NEW</span>' : '') +
+        (l.song.num ? '<span style="font-style:normal;font-weight:600;font-size:12px;border:1px solid ' + C.muted + ';border-radius:3px;padding:0 4px;margin-right:5px">' + esc_(l.song.num) + '</span>' : '') +
+        esc_(l.song.title) + '</i></b>' + (l.verses ? ' <span style="color:' + C.muted + ';font-size:12px">' + esc_(l.verses) + '</span>' : '');
+    }
+    let row = '<tr><td valign="top" style="padding:3px 10px 3px 0;color:' + C.muted + '">' + left + '</td><td valign="top" align="right" style="padding:3px 0">' + right + '</td></tr>';
+    if (l.arr) {
+      row += '<tr><td colspan="2" style="padding:0 0 6px 8px"><div style="border-left:3px solid ' + C.brand + ';padding:2px 0 2px 9px;font-size:13px;color:' + C.ink + '">' +
+        esc_(l.arr).replace(/\n/g, '<br>') + '</div></td></tr>';
+    }
+    return row;
+  }).join('') + '</table>';
+  if (sec.credits.length) {
+    html += '<div style="margin-top:8px;padding-top:6px;border-top:1px solid ' + C.line + ';font-size:12px;color:' + C.muted + '">' +
+      sec.credits.map(([h, list]) => '<div><b style="color:' + C.mid + '">' + esc_(h) + ':</b> ' +
+        list.map(([k, v]) => esc_(k) + ' ' + '<span style="color:' + C.ink + '">' + esc_(v) + '</span>').join(' · ') + '</div>').join('') + '</div>';
+  }
+  return html;
+}
+
+/** "Piano: Jenn Lambert" with the label in the muted color. */
+function labelled_(line) {
+  const m = /^([^:]+):\s*(.*)$/.exec(line);
+  return m ? '<span style="color:' + EMAIL_COLORS.muted + '">' + esc_(m[1]) + ':</span> ' + esc_(m[2]) : esc_(line);
+}
+
+// "43 Rejoice the Lord Is King", "*New* I Set My Hope on Jesus" (same rules as the builder)
+function parseSong_(textValue) {
+  let t = String(textValue || '').trim();
+  const isNew = /^\*?\s*new\s*\*?\s*/i.test(t);
+  if (isNew) t = t.replace(/^\*?\s*new\s*\*?\s*/i, '');
+  const m = /^(\d{1,4})\s+(.+)$/.exec(t);
+  return { isNew, num: m ? m[1] : '', title: m ? m[2] : t };
+}
+// How the builder files a remembered arrangement: a hymn by number, anything else by title.
+function songKey_(value) {
+  const s = parseSong_(value);
+  if (s.num) return '#' + s.num;
+  return s.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** "November 8" */
+function longDate_(key) {
+  const p = key.split('-').map(Number);
+  return MONTH_NAMES[p[1] - 1] + ' ' + p[2];
 }
 
 /** The "Notes" bullets for this Sunday, from Service Notes and anything unusual in the saved orders. */
