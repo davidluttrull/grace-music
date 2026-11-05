@@ -248,20 +248,29 @@ function buildEmail_(sunday, services, orders, templates) {
 
   // HTML in the church's colors (the volunteer page's greens), with inline styles because Gmail drops <style>.
   const C = EMAIL_COLORS;
-  const card = (inner) => '<tr><td style="padding:0 0 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid ' + C.line + ';border-radius:12px"><tr><td style="padding:16px 20px">' + inner + '</td></tr></table></td></tr>';
+  const box = (bg, inner) => '<div style="padding:0 7px 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + bg + ';' +
+    (bg === '#fff' ? 'border:1px solid ' + C.line + ';' : '') + 'border-radius:12px"><tr><td style="padding:16px 20px">' + inner + '</td></tr></table></div>';
+  const card = (inner) => box('#fff', inner);
+  // A column that sits side by side on a wide screen and full width on a phone. No media queries (Gmail's
+  // editor drops <style>): below WIDE the calc() width is huge and max-width wins; above it, min-width wins.
+  // A mail app without calc() just stacks them, like a phone.
+  const WIDE = 760;
+  const column = (share, inner) => '<div style="display:inline-block;vertical-align:top;text-align:left;font-size:14px;width:100%;' +
+    'min-width:' + share + '%;max-width:100%;width:calc((' + WIDE + 'px - 100%) * 1000)">' + inner + '</div>';
   const h2 = (t, right) => '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid ' + C.brand + ';margin:0 0 8px"><tr>' +
     '<td style="font-size:17px;font-weight:700;color:' + C.deep + ';padding:0 0 4px">' + esc_(t) + '</td>' +
     (right ? '<td align="right" style="font-size:12px;color:' + C.muted + ';padding:0 0 4px">' + esc_(right) + '</td>' : '') + '</tr></table>';
   const p = (inner, extra) => '<p style="margin:0 0 10px;' + (extra || '') + '">' + inner + '</p>';
 
-  let body = card(p(esc_(greeting)) + p(esc_(intro) + ' ' + esc_(attachSentence)) +
+  const notesCard = card(p(esc_(greeting)) + p(esc_(intro) + ' ' + esc_(attachSentence)) +
     '<div style="font-weight:700;color:' + C.deep + ';margin:14px 0 4px">Notes</div>' +
     '<ul style="margin:0;padding:0 0 0 20px">' + notes.map((n) => '<li style="margin:0 0 4px">' + esc_(n) + '</li>').join('') + '</ul>');
+  let orderCard = '';
   if (sections.length) {
-    body += card('<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:' + C.mid + ';margin:0 0 10px">THIS SUNDAY\'S ORDER OF SERVICE</div>' +
+    orderCard = card('<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:' + C.mid + ';margin:0 0 10px">THIS SUNDAY\'S ORDER OF SERVICE</div>' +
       sections.map((sec, k) => '<div style="' + (k ? 'margin-top:18px' : '') + '">' + sectionHtml_(sec) + '</div>').join(''));
   }
-  body += card(h2('Upcoming Assignments') + blocks.map((b, k) => {
+  const upcomingCard = card(h2('Upcoming Assignments') + blocks.map((b, k) => {
     let out = '<div style="' + (k ? 'margin-top:14px' : 'margin-top:4px') + '"><div style="font-weight:700;color:' + C.deep + '">' + esc_(b.title) + '</div>' +
       (b.extra ? '<div style="font-size:13px;color:' + C.mid + ';margin:1px 0 3px">' + esc_(b.extra) + '</div>' : '');
     if (!b.lines.length && !b.gift.length) return out + '<div style="color:' + C.muted + '">TBA</div></div>';
@@ -270,12 +279,15 @@ function buildEmail_(sunday, services, orders, templates) {
     return out + b.gift.map((l) => '<div>' + labelled_(l) + '</div>').join('') + '</div>';
   }).join('') + p('I think that covers everything!', 'margin:16px 0 0'));
 
-  const html = '<div style="background:' + C.bg + ';padding:16px 8px;font-family:Poppins,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45;color:' + C.ink + '">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto">' +
-    '<tr><td style="padding:0 0 14px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + C.deep + ';border-radius:12px"><tr><td style="padding:16px 20px">' +
-    '<div style="font-size:12px;font-weight:600;letter-spacing:.08em;color:' + C.brand + '">GRACE BAPTIST CHURCH · MUSIC</div>' +
-    '<div style="font-size:21px;font-weight:700;color:#fff;margin-top:2px">Sunday, ' + esc_(longDate_(sunday)) + '</div>' +
-    '</td></tr></table></td></tr>' + body + '</table></div>';
+  // Phone: header, notes, order, assignments, one under another. Wide screen: the order beside the assignments.
+  const columns = orderCard
+    ? '<div style="font-size:0;text-align:center">' + column(63, orderCard) + column(37, upcomingCard) + '</div>'
+    : upcomingCard;
+  const html = '<div style="background:' + C.bg + ';padding:16px 1px;font-family:Poppins,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45;color:' + C.ink + '">' +
+    '<div style="max-width:980px;margin:0 auto">' +
+    box(C.deep, '<div style="font-size:12px;font-weight:600;letter-spacing:.08em;color:' + C.brand + '">GRACE BAPTIST CHURCH \u00b7 MUSIC</div>' +
+      '<div style="font-size:21px;font-weight:700;color:#fff;margin-top:2px">Sunday, ' + esc_(longDate_(sunday)) + '</div>') +
+    notesCard + columns + '</div></div>';
 
   return {
     subject: subjectFor_(sunday),
@@ -347,7 +359,7 @@ function sectionHtml_(sec) {
     if (l.song) {
       right = '<b><i>' + (l.song.isNew ? '<span style="font-style:normal;font-size:10px;border:1px solid ' + C.ink + ';border-radius:3px;padding:0 3px;margin-right:4px">NEW</span>' : '') +
         (l.song.num ? '<span style="font-style:normal;font-weight:600;font-size:12px;border:1px solid ' + C.muted + ';border-radius:3px;padding:0 4px;margin-right:5px">' + esc_(l.song.num) + '</span>' : '') +
-        esc_(l.song.title) + '</i></b>' + (l.verses ? ' <span style="color:' + C.muted + ';font-size:12px">' + esc_(l.verses) + '</span>' : '');
+        esc_(l.song.title) + '</i></b>' + (l.verses ? ' <span style="color:' + C.muted + ';font-size:12px;white-space:nowrap">' + esc_(l.verses) + '</span>' : '');
     }
     let row = '<tr><td valign="top" style="padding:3px 10px 3px 0;color:' + C.muted + '">' + left + '</td><td valign="top" align="right" style="padding:3px 0">' + right + '</td></tr>';
     if (l.arr) {
