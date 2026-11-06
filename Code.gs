@@ -190,6 +190,38 @@ function rotation_() {
   return out;
 }
 
+/**
+ * The sub lists typed under the Rotation table, one per line as "Label: name, name & name Surname", e.g.
+ * "Backup singers (call for last-minute fills): Carrie Warner, Amber Foote". "Seth & Kendall Plew" becomes
+ * Seth Plew and Kendall Plew. Lines without a colon, or with nothing that looks like a name, are skipped.
+ */
+function rotationSubs_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ROTATION_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const lines = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getDisplayValues().map((r) => String(r[0]).trim());
+  const end = lines.indexOf('');
+  if (end < 0) return [];
+  const looksLikeName = /^[A-Z][\w'\u2019.-]*(\s+[A-Z][\w'\u2019.-]*){0,3}$/;
+  const out = [];
+  lines.slice(end).forEach((line) => {
+    const colon = line.indexOf(':');
+    if (colon < 1) return;
+    const label = line.slice(0, colon).replace(/\(.*?\)/g, '').trim();
+    const names = [];
+    line.slice(colon + 1).split(/\s*[,;]\s*/).forEach((part) => {
+      const pieces = part.split(/\s*(?:&|\/|\band\b)\s*/).map((p) => p.trim().replace(/\.$/, '')).filter(Boolean);
+      const last = pieces.length ? pieces[pieces.length - 1].split(/\s+/) : [];
+      const surname = last.length > 1 ? last[last.length - 1] : '';
+      pieces.forEach((p) => {
+        const name = surname && !/\s/.test(p) ? p + ' ' + surname : p;
+        if (looksLikeName.test(name) && names.indexOf(name) < 0) names.push(name);
+      });
+    });
+    if (label && names.length) out.push({ label, names });
+  });
+  return out;
+}
+
 /** A service block's first row: a name in A, nothing in B, a date in C. */
 function isHeader_(shownRow, valueRow) {
   return String(shownRow[0]).trim() !== '' && String(shownRow[1]).trim() === '' &&
@@ -554,7 +586,10 @@ function editData_(body) {
     people[v] = true;
     v.split(/\s*(?:&|,|\/|\band\b)\s*/).forEach((n) => { if (n.trim()) people[n.trim()] = true; });
   };
-  rotation_().forEach((r) => r.weeks.forEach(addPerson));
+  const table = rotation_();
+  const subs = rotationSubs_();
+  table.forEach((r) => r.weeks.forEach(addPerson));
+  subs.forEach((s) => s.names.forEach(addPerson));
 
   const byKey = {};
   sheets.forEach((sheet) => {
@@ -600,7 +635,7 @@ function editData_(body) {
   const songs = songsSheet ? readSongs_(songsSheet).filter((x) => !x.removed && x.title)
     .map((x) => (x.num ? x.num + ' ' + x.title : x.title)) : [];
 
-  return { status: 'ok', services, songs, people: Object.keys(people).sort(), away: awayByService_(ss, services, tz) };
+  return { status: 'ok', services, songs, people: Object.keys(people).sort(), away: awayByService_(ss, services, tz), rotation: table, subs };
 }
 
 /** "2026-11-08|Sunday AM" -> names on the Away tab for that service (a blank Service means every service that day). */

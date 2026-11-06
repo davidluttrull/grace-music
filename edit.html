@@ -94,6 +94,33 @@
   .row input:focus { outline: 2px solid var(--brand); outline-offset: -1px; border-color: transparent; }
   .row.is-out input { border-color: var(--out-ink); background: var(--out-bg); color: var(--out-ink); }
   .row input[readonly] { opacity: .6; }
+  .field { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px 0 12px; background: var(--field); font-size: 16px; text-align: left; }
+  .field span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field i { font-style: normal; color: var(--muted); opacity: .8; }
+  .field svg { flex: 0 0 auto; color: var(--muted); }
+  .field:focus-visible { outline: 2px solid var(--brand); outline-offset: -1px; }
+  .field:disabled { opacity: .6; }
+  .row.is-out .field { border-color: var(--out-ink); background: var(--out-bg); color: var(--out-ink); }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  dialog.sheet { margin: auto auto 0; width: 100%; max-width: 640px; height: 88vh; height: 88dvh; max-height: 88vh; max-height: 88dvh; padding: 0; border-radius: 18px 18px 0 0; }
+  dialog.sheet[open] { display: flex; flex-direction: column; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px 8px; }
+  .sheet-head b { display: block; font-size: 17px; }
+  .sheet-head span { font-size: 13px; color: var(--muted); }
+  .sheet-search { padding: 0 16px 10px; border-bottom: 1px solid var(--line); }
+  .sheet-search input { width: 100%; height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; background: var(--field); font-size: 16px; letter-spacing: normal; }
+  .sheet-list { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 0 max(16px, env(safe-area-inset-bottom)); }
+  .grp { margin: 12px 16px 4px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-mid); }
+  @media (prefers-color-scheme: dark) { .grp { color: var(--brand); } }
+  .opt { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 46px; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 8px 16px; text-align: left; font-size: 16px; }
+  .opt:active { background: var(--tint); }
+  .opt .name { flex: 1; min-width: 0; }
+  .tag { flex: 0 0 auto; font-size: 12px; font-weight: 600; border-radius: 6px; padding: 1px 7px; background: var(--tint); color: var(--brand-mid); border: 1px solid var(--tint-line); }
+  .tag.out { background: var(--out-bg); color: var(--out-ink); border-color: transparent; }
+  .opt.more { color: var(--brand-mid); font-weight: 600; }
+  .opt.clear { color: var(--muted); }
+  .hint { margin: 14px 16px; font-size: 14px; color: var(--muted); }
   .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 18px; margin-top: 3px; font-size: 12px; color: var(--muted); }
   .meta .ok { color: var(--ok); font-weight: 600; }
   .meta .bad { color: var(--danger); }
@@ -123,8 +150,11 @@
   <nav class="bar" aria-label="Services"><div class="chips" id="chips"></div></nav>
   <main id="main"><p class="msg">Loading the schedule…</p></main>
 
-  <datalist id="people"></datalist>
-  <datalist id="songs"></datalist>
+  <dialog id="picker" class="sheet" aria-labelledby="pkTitle">
+    <div class="sheet-head"><div><b id="pkTitle"></b><span id="pkSub"></span></div><button type="button" class="btn" id="pkClose">Cancel</button></div>
+    <div class="sheet-search"><input id="pkSearch" type="search" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></div>
+    <div class="sheet-list" id="pkList"></div>
+  </dialog>
 
   <dialog id="codeDialog">
     <form id="codeForm">
@@ -203,8 +233,6 @@
     try {
       data = await withCode('editData');
       loadedAt = Date.now();
-      $('#people').innerHTML = data.people.map((p) => '<option value="' + esc(p) + '">').join('');
-      $('#songs').innerHTML = data.songs.map((p) => '<option value="' + esc(p) + '">').join('');
       const keys = data.services.map(keyOf);
       const want = decodeURIComponent(location.hash.slice(1));
       if (!keys.includes(current)) current = keys.includes(want) ? want : (keys[0] || '');
@@ -255,17 +283,35 @@
     svc.rows.forEach((row, i) => paintMeta(svc, i));
   }
 
+  const CHEVRON = '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const placeholderOf = (row) => (row.section === SONG_SECTION ? 'Choose a song' : 'Nobody');
+  const fieldInner = (row) => '<span>' + (row.value ? esc(row.value) : '<i>' + placeholderOf(row) + '</i>') + '</span>' + CHEVRON;
+
+  // Service Notes is a plain text box; every other row opens the picker.
   function rowHtml(svc, i) {
     const row = svc.rows[i];
-    const song = row.section === SONG_SECTION;
-    const note = row.role === NOTES_ROLE;
-    const list = song ? 'songs' : note ? '' : 'people';
-    const placeholder = song ? 'Number and title' : note ? 'Nothing special' : 'Nobody';
     const id = 'f' + i;
-    return '<div class="row" data-i="' + i + '"><label for="' + id + '">' + esc(row.role) + '</label>' +
-      '<input id="' + id + '" value="' + esc(row.value) + '" placeholder="' + placeholder + '"' + (list ? ' list="' + list + '"' : '') +
-      ' autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="' + (note ? 'sentences' : 'words') + '" enterkeyhint="done">' +
-      '<div class="meta"></div></div>';
+    const box = row.role === NOTES_ROLE
+      ? '<input id="' + id + '" value="' + esc(row.value) + '" placeholder="Nothing special" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="sentences" enterkeyhint="done">'
+      : '<button type="button" class="field" id="' + id + '" data-pick="' + i + '" aria-haspopup="dialog">' + fieldInner(row) + '</button>';
+    return '<div class="row" data-i="' + i + '"><label for="' + id + '">' + esc(row.role) + '</label>' + box + '<div class="meta"></div></div>';
+  }
+
+  // ---------- The regular rotation ----------
+  // Same rules as the volunteer page: Week 1 is the first Sunday (or Wednesday) of the month, and Prelude follows Piano.
+  const ROTATION_ROLE = { Prelude: 'Piano' };
+  const weekOfMonth = (key) => Math.ceil(parseDate(key).getDate() / 7);
+  const splitNames = (v) => String(v || '').split(/\s*(?:&|,|\/|\+|\band\b)\s*/).map((s) => s.trim()).filter(Boolean);
+  const nameKey = (v) => splitNames(v).map((s) => s.toLowerCase()).sort().join('|');
+
+  function rotationRow(svc, row) {
+    const role = ROTATION_ROLE[row.role] || row.role;
+    return (data.rotation || []).find((r) => r.service === svc.service && r.section === row.section && r.role === role) || null;
+  }
+  // Who the rotation has in this cell this week: a name, '' (nobody that week), or null (not a rotation row).
+  function usualFor(svc, row) {
+    const r = rotationRow(svc, row);
+    return r ? (r.weeks[weekOfMonth(svc.date) - 1] || '') : null;
   }
 
   // Someone on the Away tab is in this cell (a cell can have two names, "Isabel Bott & Eliana Worsham").
@@ -285,22 +331,36 @@
     if (status) bits.push(status);
     if (out.length) bits.push('<span class="out">' + esc(out.join(', ')) + ' marked out</span>');
     if (!status) {
+      const usual = usualFor(svc, row);
       if (row.rot) bits.push('Rotation');
-      else if (row.reset) bits.push((row.value ? 'Changed from the rotation' : 'Blank (rotation has someone)') + ' <button type="button" data-reset="' + i + '">Use rotation</button>');
+      else if (row.reset && usual !== null) {
+        bits.push((row.value ? 'Changed' : 'Blank') + ' · rotation has ' + (usual ? '<b>' + esc(usual) + '</b>' : 'nobody') +
+          ' <button type="button" data-reset="' + i + '">Use rotation</button>');
+      } else if (row.reset) bits.push((row.value ? 'Changed from the rotation' : 'Blank (rotation has someone)') + ' <button type="button" data-reset="' + i + '">Use rotation</button>');
     }
     el.querySelector('.meta').innerHTML = bits.join(' · ');
   }
 
   // ---------- Saving ----------
-  async function save(i, reset) {
+  // The box shows `value` (the notes input, or the picker field's text).
+  function showValue(i, row) {
+    const el = document.getElementById('f' + i);
+    if (!el) return;
+    if (el.tagName === 'INPUT') el.value = row.value;
+    else el.innerHTML = fieldInner(row);
+  }
+
+  // value: what to write (undefined = read the notes box); reset: put the rotation back.
+  async function save(i, reset, picked) {
     const key = current;
     const svc = serviceOf(key);
     const row = svc.rows[i];
     const input = document.getElementById('f' + i);
-    const value = reset ? '' : input.value.trim();
-    if (!reset && value === row.value) { input.value = row.value; return; }
+    const value = reset ? '' : (picked !== undefined ? picked : input.value).trim();
+    if (!reset && value === row.value) { showValue(i, row); return; }
     const hadRotation = row.rot || row.reset;
-    input.readOnly = true;
+    if (input.tagName === 'INPUT') input.readOnly = true; else input.disabled = true;
+    if (picked !== undefined) input.innerHTML = fieldInner({ section: row.section, value });
     saving++;
     paintMeta(svc, i, 'Saving…');
     try {
@@ -309,7 +369,7 @@
       row.rot = !!res.rot;
       row.reset = !row.rot && hadRotation;
       if (current === key) {
-        input.value = row.value;
+        showValue(i, row);
         if (res.status === 'conflict') {
           paintMeta(svc, i, '<span class="bad">Someone changed this in the Sheet' + (row.value ? ' to “' + esc(row.value) + '”' : '') + '. Your change wasn’t saved; type it again to replace theirs.</span>');
         } else {
@@ -319,13 +379,122 @@
       }
     } catch (err) {
       if (current === key) {
+        if (picked !== undefined) { showValue(i, row); pendingPick[i] = picked; }
         paintMeta(svc, i, '<span class="bad">' + esc(err.message) + '</span> <button type="button" data-retry="' + i + '">Try again</button>');
       }
     } finally {
       saving--;
       input.readOnly = false;
+      input.disabled = false;
     }
   }
+  const pendingPick = {};   // a picked value that didn't save, for Try again
+
+  // ---------- The picker ----------
+  let pickIndex = -1;
+  let showAll = false;
+
+  function awayHas(name) {
+    const n = name.toLowerCase();
+    return ((data.away || {})[current] || []).some((a) => a && (n.includes(a.toLowerCase()) || a.toLowerCase().includes(n)));
+  }
+
+  // The lists for a name row: this week's rotation, who usually does this job, others in the section, the subs, everyone.
+  function peopleGroups(svc, row) {
+    const seen = {};
+    const groups = [];
+    const add = (title, values) => {
+      const list = [];
+      values.forEach((v) => { const k = nameKey(v); if (k && !seen[k]) { seen[k] = true; list.push(v); } });
+      if (list.length) groups.push({ title, list });
+    };
+    const usual = usualFor(svc, row);
+    const r = rotationRow(svc, row);
+    if (usual) add('Rotation this week', [usual]);
+    if (r) {
+      const cells = r.weeks.filter(Boolean);
+      const singles = [].concat(...cells.map(splitNames));
+      add('Usually ' + row.role, cells.concat(singles));
+    }
+    // The sub lists from under the Rotation table; one whose label mentions singers only shows on singer rows.
+    (data.subs || []).forEach((s) => {
+      if (/singer/i.test(s.label) && !/singer/i.test(row.section)) return;
+      add(s.label, s.names);
+    });
+    const section = (data.rotation || []).filter((x) => x.service === svc.service && x.section === row.section);
+    add('Other ' + row.section, [].concat(...section.map((x) => [].concat(...x.weeks.map(splitNames)))).sort());
+    const rest = data.people.filter((p) => !seen[nameKey(p)] && splitNames(p).length === 1);
+    return { groups, rest };
+  }
+
+  function optHtml(value, svc, row, opts) {
+    const tags = [];
+    if (value === row.value) tags.push('<span class="tag">Now</span>');
+    if (opts && opts.usual) tags.push('<span class="tag">Rotation</span>');
+    if (row.section !== SONG_SECTION && splitNames(value).some(awayHas)) tags.push('<span class="tag out">Out</span>');
+    return '<button type="button" class="opt" data-v="' + esc(value) + '"><span class="name">' + esc(value) + '</span>' + tags.join('') + '</button>';
+  }
+
+  function renderPicker() {
+    const svc = serviceOf(current);
+    const row = svc.rows[pickIndex];
+    const q = $('#pkSearch').value.trim();
+    const ql = q.toLowerCase();
+    const song = row.section === SONG_SECTION;
+    let html = '';
+    let exact = false;
+    const usual = song ? null : usualFor(svc, row);
+    const opt = (v) => { if (v.toLowerCase() === ql) exact = true; return optHtml(v, svc, row, { usual: usual && nameKey(v) === nameKey(usual) }); };
+
+    if (song) {
+      const hits = !q ? [] : data.songs.filter((s) => {
+        const sl = s.toLowerCase();
+        return /^\d/.test(q) ? sl.startsWith(ql) || sl.includes(' ' + ql) : sl.includes(ql);
+      }).slice(0, 60);
+      if (row.value && !q) html += '<p class="grp">Now</p>' + opt(row.value);
+      html += hits.map(opt).join('');
+      if (!q) html += '<p class="hint">Type a song number or part of the title.</p>';
+      else if (!hits.length) html += '<p class="hint">No song on the Songs tab matches “' + esc(q) + '”.</p>';
+    } else {
+      const { groups, rest } = peopleGroups(svc, row);
+      if (q) {
+        const all = [].concat(...groups.map((g) => g.list), rest).filter((v) => v.toLowerCase().includes(ql));
+        html += all.map(opt).join('');
+        if (!all.length) html += '<p class="hint">Nobody on the schedule matches “' + esc(q) + '”.</p>';
+      } else {
+        html += groups.map((g) => '<p class="grp">' + esc(g.title) + '</p>' + g.list.map(opt).join('')).join('');
+        html += showAll
+          ? '<p class="grp">Everyone else</p>' + rest.map(opt).join('')
+          : (rest.length ? '<button type="button" class="opt more" data-all="1">Show everyone else (' + rest.length + ')</button>' : '');
+      }
+    }
+    // Typing something not on the lists: offer it as is (first when nothing matches, last otherwise).
+    if (q && !exact) {
+      const use = '<button type="button" class="opt more" data-v="' + esc(q) + '">Use “' + esc(q) + '” as typed</button>';
+      html = html.includes('class="opt"') ? html + use : use + html;
+    }
+    if (row.value && !q) html += '<button type="button" class="opt clear" data-v="">Leave blank</button>';
+    $('#pkList').innerHTML = html;
+  }
+
+  function openPicker(i) {
+    const svc = serviceOf(current);
+    const row = svc.rows[i];
+    if (pickIndex === i && $('#picker').open) return;
+    pickIndex = i;
+    showAll = false;
+    const song = row.section === SONG_SECTION;
+    $('#pkTitle').textContent = row.role;
+    $('#pkSub').textContent = (song ? '' : row.section + ' · ') + fmt(svc.date, { weekday: 'short', month: 'short', day: 'numeric' });
+    $('#pkSearch').value = '';
+    $('#pkSearch').placeholder = song ? 'Song number or title' : 'Search, or type any name';
+    renderPicker();
+    $('#picker').showModal();
+    $('#pkList').scrollTop = 0;
+    if (song) $('#pkSearch').focus();
+  }
+
+  function closePicker() { $('#picker').close(); pickIndex = -1; }
 
   // ---------- Events ----------
   $('#chips').addEventListener('click', (e) => {
@@ -350,15 +519,37 @@
     }
   });
   $('#main').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-reset],[data-retry]');
+    const b = e.target.closest('[data-reset],[data-retry],[data-pick]');
     if (!b) return;
-    if (b.dataset.reset) save(Number(b.dataset.reset), true);
-    else save(Number(b.dataset.retry));
+    if (b.dataset.pick) return openPicker(Number(b.dataset.pick));
+    if (b.dataset.reset) return save(Number(b.dataset.reset), true);
+    const i = Number(b.dataset.retry);
+    const picked = pendingPick[i];
+    delete pendingPick[i];
+    save(i, false, picked);
   });
+  $('#pkList').addEventListener('click', (e) => {
+    const b = e.target.closest('.opt');
+    if (!b) return;
+    if (b.dataset.all) { showAll = true; renderPicker(); return; }
+    const i = pickIndex;
+    closePicker();
+    save(i, false, b.dataset.v);
+  });
+  $('#pkSearch').addEventListener('input', renderPicker);
+  $('#pkSearch').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const first = $('#pkList .opt[data-v]');
+    if (first && $('#pkSearch').value.trim()) first.click();
+  });
+  $('#pkClose').addEventListener('click', closePicker);
+  $('#picker').addEventListener('click', (e) => { if (e.target === $('#picker')) closePicker(); });   // tap outside the sheet
+  $('#picker').addEventListener('close', () => { pickIndex = -1; });
   // Coming back to the page later: get anything changed in the Sheet meanwhile, unless a box is being edited.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible' || !data || Date.now() - loadedAt < STALE_MS) return;
-    if (saving || (document.activeElement && document.activeElement.tagName === 'INPUT')) return;
+    if (saving || $('#picker').open || (document.activeElement && document.activeElement.tagName === 'INPUT')) return;
     load();
   });
   window.addEventListener('beforeunload', (e) => { if (saving) { e.preventDefault(); e.returnValue = ''; } });
