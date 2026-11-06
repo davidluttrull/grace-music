@@ -230,6 +230,7 @@
     <button type="button" class="btn" id="pdfBtn" title="Saves one copy at its own size into Orders of Service in Drive, for the team email">Save PDF</button>
     <button type="button" class="btn primary" id="printBtn">Print</button>
     <a class="btn" id="packetLink" href="packet.html" title="Pick the song PDFs and combine them into one">Song packet</a>
+    <a class="btn" id="editLink" href="edit.html" title="Change who's on or the songs for a service, from a phone or here">Edit schedule</a>
     <a class="help" href="leader-guide.html" target="_blank" rel="noopener">Help</a>
   </div>
 
@@ -1197,6 +1198,7 @@
     $('#status').className = 'status' + (dirty ? ' dirty' : '');
     $('#status').textContent = dirty ? 'Unsaved changes (kept on this computer)' : anySaved ? 'Saved' : 'Not saved yet';
     const svc = sheet.length && sheet[0].svc;
+    $('#editLink').href = 'edit.html' + (svc ? '#' + encodeURIComponent(svc.date + '|' + svc.service) : '');
     $('#packetLink').href = 'packet.html' + (svc ? '?date=' + svc.date + (svc.service === 'Sunday AM' ? '' : '&service=' + encodeURIComponent(svc.service)) : '');
   }
 

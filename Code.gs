@@ -28,6 +28,12 @@
  * builder's Cancelled switch writes a service's Service Notes cell (setNote),
  * with the same code.
  *
+ * The schedule editor (edit.html) is for changes from a phone. With the same
+ * code, doPost {action: 'editData'} returns every role row of the upcoming
+ * services (blank ones too), whether each cell still has its rotation
+ * formula, who's on the Away tab, and name and song suggestions;
+ * {action: 'setCell'} writes one cell, or puts its rotation formula back.
+ *
  * It also adds a Music Schedule menu to the Sheet: one item puts the rotation
  * formulas back in selected cells, another builds the next month's tab, and
  * "Update song list" fills the Song Log from the month tabs' song rows.
@@ -214,6 +220,8 @@ function doPost(e) {
     if (body && body.action === 'orders') return json_(privateOrders_(body));
     if (body && body.action === 'saveOrder') return json_(saveOrder_(body));
     if (body && body.action === 'setNote') return json_(setServiceNote_(body));
+    if (body && body.action === 'editData') return json_(editData_(body));
+    if (body && body.action === 'setCell') return json_(setCell_(body));
     if (body && body.action === 'packetSetup') return json_(packetSetup_(body));
     if (body && body.action === 'pdfFile') return json_(pdfFile_(body));
     if (body && body.action === 'uploadPdf') return json_(uploadPdf_(body));
@@ -519,6 +527,140 @@ function serviceCell_(date, service, role) {
     }
   }
   return null;
+}
+
+// ---------- Schedule editor (edit.html) ----------
+
+/**
+ * Every role row of the upcoming services, for the editor: { services: [{ date, service, rows: [{ section,
+ * role, value, rot, reset }] }], people, songs, away }. rot: the cell still has its rotation formula;
+ * reset: it was typed over and the rotation can be put back. away: "date|service" -> names on the Away tab.
+ */
+function editData_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tz = Session.getScriptTimeZone();
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - DAYS_BACK);
+  const fromKey = Utilities.formatDate(cutoff, tz, 'yyyy-MM-dd');
+  const sheets = monthSheets_(ss);
+  const rotation = sheets.length ? rotationFormulas_(ss, sheets[0]) : {};
+  const width = FIRST_DATE_COL - 1 + DATE_COLS;
+  const people = {};
+  const addPerson = (v) => {
+    v = String(v || '').trim();
+    if (!v) return;
+    people[v] = true;
+    v.split(/\s*(?:&|,|\/|\band\b)\s*/).forEach((n) => { if (n.trim()) people[n.trim()] = true; });
+  };
+  rotation_().forEach((r) => r.weeks.forEach(addPerson));
+
+  const byKey = {};
+  sheets.forEach((sheet) => {
+    const last = sheet.getLastRow();
+    if (last < 2) return;
+    const range = sheet.getRange(1, 1, last, width);
+    const values = range.getValues();
+    const shown = range.getDisplayValues();
+    const formulas = range.getFormulasR1C1();
+    for (let r = 0; r < values.length; r++) {
+      if (!isHeader_(shown[r], values[r])) continue;
+      const service = String(shown[r][0]).trim();
+      const cols = [];
+      for (let c = FIRST_DATE_COL - 1; c < width; c++) {
+        const v = values[r][c];
+        if (v instanceof Date) cols.push({ c, date: Utilities.formatDate(v, tz, 'yyyy-MM-dd') });
+      }
+      const rows = [];
+      let section = '';
+      for (let k = r + 1; k < values.length; k++) {
+        const a = String(shown[k][0]).trim();
+        const b = String(shown[k][1]).trim();
+        if ((!a && !b) || isHeader_(shown[k], values[k])) break;
+        if (a) section = a;
+        if (b && b !== 'Week') rows.push({ k, section, role: b });
+      }
+      cols.forEach((col) => {
+        const out = rows.map((row) => {
+          const value = String(shown[row.k][col.c]).trim();
+          const rot = !!formulas[row.k][col.c];
+          if (row.section !== SONG_SECTION && row.role !== NOTES_ROLE) addPerson(value);
+          return { section: row.section, role: row.role, value, rot, reset: !rot && !!rotation[service + '|' + row.role] };
+        });
+        if (col.date >= fromKey) byKey[col.date + '|' + service] = { date: col.date, service, rows: out };
+      });
+    }
+  });
+  const order = (x) => (SERVICES.indexOf(x) < 0 ? SERVICES.length : SERVICES.indexOf(x));
+  const services = Object.keys(byKey).map((k) => byKey[k])
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : order(a.service) - order(b.service)));
+
+  const songsSheet = ss.getSheetByName(SONGS_SHEET);
+  const songs = songsSheet ? readSongs_(songsSheet).filter((x) => !x.removed && x.title)
+    .map((x) => (x.num ? x.num + ' ' + x.title : x.title)) : [];
+
+  return { status: 'ok', services, songs, people: Object.keys(people).sort(), away: awayByService_(ss, services, tz) };
+}
+
+/** "2026-11-08|Sunday AM" -> names on the Away tab for that service (a blank Service means every service that day). */
+function awayByService_(ss, services, tz) {
+  const out = {};
+  const sheet = ss.getSheetByName(AWAY_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return out;
+  let col;
+  try { col = awayColumns_(sheet); } catch (err) { return out; }
+  const day = (v) => (v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : '');
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues().map((v) => ({
+    name: String(v[col.Name - 1]).trim(), from: day(v[col.From - 1]), to: day(v[col.To - 1]), service: String(v[col.Service - 1]).trim(),
+  })).filter((a) => a.name && a.from);
+  services.forEach((svc) => {
+    const names = rows.filter((a) => svc.date >= a.from && svc.date <= (a.to || a.from) && (!a.service || a.service === svc.service))
+      .map((a) => a.name);
+    if (names.length) out[svc.date + '|' + svc.service] = names;
+  });
+  return out;
+}
+
+/**
+ * Writes one cell from the editor: { date, service, role, value, was, reset }. If the cell no longer shows
+ * `was` (someone changed it in the Sheet meanwhile), nothing is written and the current value comes back.
+ * reset puts the row's rotation formula back instead.
+ */
+function setCell_(body) {
+  const refused = checkOrderCode_(body.code);
+  if (refused) return refused;
+  const date = String(body.date || '');
+  const service = String(body.service || '').trim();
+  const role = String(body.role || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !service || service.length > 60 || !role || role.length > 60) {
+    throw new Error('That spot can’t be changed. Reload the page and try again.');
+  }
+  let value = String(body.value == null ? '' : body.value).replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (/^[=+\-@]/.test(value)) value = "'" + value;   // never a formula
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const cell = serviceCell_(date, service, role);
+    if (!cell) throw new Error('The Sheet doesn’t have ' + role + ' for ' + service + ' on ' + date + ' anymore. Reload the page.');
+    const now = cell.getDisplayValue().trim();
+    if (typeof body.was === 'string' && now !== body.was.trim()) {
+      return { status: 'conflict', value: now, rot: !!cell.getFormula() };
+    }
+    if (body.reset) {
+      const f = rotationFormulas_(SpreadsheetApp.getActiveSpreadsheet(), cell.getSheet())[service + '|' + role];
+      if (!f) throw new Error(role + ' has no rotation to go back to.');
+      cell.setFormulaR1C1(f);
+    } else if (value) {
+      cell.setValue(value);
+    } else {
+      cell.clearContent();
+    }
+    SpreadsheetApp.flush();
+    return { status: 'ok', value: cell.getDisplayValue().trim(), rot: !!cell.getFormula() };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** null if the code is right, otherwise the reply to send back. */

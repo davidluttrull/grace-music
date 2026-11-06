@@ -79,9 +79,21 @@ The first time you use the menu, Google asks for permission the same way it did 
 - **Away tab:** each row is a name, a From date, an optional To date, an optional Service, and a note. Leave To blank for one day. Put Sunday AM, Sunday PM, or Wednesday in Service to mark just that service, or leave it blank for every service. Rows the page adds have a note starting with "Volunteer page". To clear one, delete the row.
 - Don't rename the service labels (Sunday AM, Sunday PM, Wednesday) or the "Week" rows, and keep column B empty on each service's header row. The script uses them to find each block.
 
+## Schedule editor (phone)
+
+For quick changes away from a computer, open **davidluttrull.github.io/grace-music/edit.html** on your phone. It asks for the order of service code once; the phone remembers it. On an iPhone, tap Share → **Add to Home Screen** to open it like an app.
+
+- The buttons across the top are the upcoming services. Pick one to see every row the Sheet has for it, blank ones too: Service Notes, the accompanists, songs, offering and special, singers, and media.
+- Tap a box, change it, and tap **Done** (or another box). It saves to the Sheet right away and shows **Saved ✓**. People boxes suggest names you've used; song boxes suggest songs from the Songs tab, as "number and title".
+- **Rotation** under a box means it's still the rotation name. If you change it, the box says **Changed from the rotation**, with a **Use rotation** link that puts the rotation name back (the same as the Sheet's Reset menu item, for that one cell). Clearing a box leaves that spot empty.
+- Anyone on the Away tab for that service shows in a red bar at the top, and their box turns red.
+- If someone changed a box in the Sheet after the editor loaded, your change isn't saved; the box shows their value and says so. Type yours again to replace it. **Reload** gets the latest from the Sheet, and the page reloads on its own when you come back to it after a minute.
+- The builder's **Edit schedule** button opens the editor on the same service.
+- Song changes reach the Songs tab's Last Sung column with the nightly song list update (or **Update song list** in the menu).
+
 ## Updating the script
 
-When `Code.gs` changes, paste the new version into Apps Script and save, then reload the Sheet. That's all the menu and the Songs tab need. If the change touches anything the web pages or the email helper use (the volunteer page, the builder, Save PDF, or the song packet page), also click **Deploy → Manage deployments**, click the pencil icon, choose **New version** under Version, and click **Deploy**. Don't use **New deployment**, because that creates a new URL and the pages and the email helper would stop reaching the script. (If that ever happens, put the new URL in all four places listed in step 3.)
+When `Code.gs` changes, paste the new version into Apps Script and save, then reload the Sheet. That's all the menu and the Songs tab need. If the change touches anything the web pages or the email helper use (the volunteer page, the builder, Save PDF, the song packet page, or the schedule editor), also click **Deploy → Manage deployments**, click the pencil icon, choose **New version** under Version, and click **Deploy**. Don't use **New deployment**, because that creates a new URL and the pages and the email helper would stop reaching the script. (If that ever happens, put the new URL in all four places listed in step 3.)
 
 ## Turning on "I'll be out" (one time)
 

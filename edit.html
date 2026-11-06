@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#233617">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Schedule Editor">
+<title>Schedule Editor</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand: #7BAE58;
+    --brand-deep: #233617;
+    --brand-mid: #4E7A35;
+    --bg: #F3F8EF;
+    --card: #FFFFFF;
+    --ink: #1E2A16;
+    --muted: #5B6A50;
+    --line: #DCE7D3;
+    --tint: #EFF6EA;
+    --tint-line: #C6DBB6;
+    --chip-on-bg: #233617;
+    --chip-on-ink: #FFFFFF;
+    --out-bg: #FCE4E4;
+    --out-ink: #9B1C1C;
+    --ok: #2E7D32;
+    --danger: #B3261E;
+    --field: #FFFFFF;
+    --shadow: 0 1px 2px rgba(35, 54, 23, .06), 0 2px 8px rgba(35, 54, 23, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10160C;
+      --card: #1A2414;
+      --ink: #E8F0E1;
+      --muted: #A3B396;
+      --line: #2D3B24;
+      --tint: #243319;
+      --tint-line: #3A4D2E;
+      --chip-on-bg: #7BAE58;
+      --chip-on-ink: #10160C;
+      --out-bg: #4A1F1F;
+      --out-ink: #F7C1C1;
+      --ok: #9CD67F;
+      --danger: #F2B8B5;
+      --field: #10160C;
+      --shadow: none;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.4 'Poppins', system-ui, -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  .top { background: var(--brand-deep); color: #fff; padding: 14px 16px 12px; padding-top: max(14px, env(safe-area-inset-top)); text-align: center; }
+  .top img { height: 36px; display: block; margin: 0 auto 2px; }
+  .top h1 { margin: 0; font-size: 14px; font-weight: 500; color: #CFE3C0; letter-spacing: .02em; }
+
+  .bar { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; scroll-snap-type: x proximity; scrollbar-width: none; max-width: 640px; margin: 0 auto; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; scroll-snap-align: start; border: 1px solid var(--tint-line); background: var(--tint); border-radius: 12px; padding: 6px 12px; text-align: left; line-height: 1.2; min-height: 44px; }
+  .chip b { display: block; font-size: 13px; font-weight: 600; }
+  .chip span { font-size: 12px; color: var(--muted); }
+  .chip[aria-pressed="true"] { background: var(--chip-on-bg); border-color: var(--chip-on-bg); color: var(--chip-on-ink); }
+  .chip[aria-pressed="true"] span { color: inherit; opacity: .85; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 14px 16px 40px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin: 2px 2px 12px; }
+  .head h2 { margin: 0; font-size: 21px; line-height: 1.2; }
+  .head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .reload { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 6px 10px; font-size: 13px; font-weight: 500; white-space: nowrap; min-height: 36px; }
+
+  .banner { background: var(--out-bg); color: var(--out-ink); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; font-size: 14px; }
+  .msg { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; color: var(--muted); }
+  .msg.err { color: var(--danger); }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); margin: 0 0 12px; overflow: hidden; }
+  .card h3 { margin: 0; padding: 10px 14px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand-mid); background: var(--tint); border-bottom: 1px solid var(--line); }
+  @media (prefers-color-scheme: dark) { .card h3 { color: var(--brand); } }
+  .row { padding: 9px 14px 8px; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 3px; }
+  .row input { width: 100%; height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; background: var(--field); font-size: 16px; }
+  .row input:focus { outline: 2px solid var(--brand); outline-offset: -1px; border-color: transparent; }
+  .row.is-out input { border-color: var(--out-ink); background: var(--out-bg); color: var(--out-ink); }
+  .row input[readonly] { opacity: .6; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 18px; margin-top: 3px; font-size: 12px; color: var(--muted); }
+  .meta .ok { color: var(--ok); font-weight: 600; }
+  .meta .bad { color: var(--danger); }
+  .meta .out { background: var(--out-bg); color: var(--out-ink); border-radius: 6px; padding: 0 6px; font-weight: 600; }
+  .meta button { border: 0; background: none; padding: 2px 0; color: var(--brand-mid); font-weight: 600; text-decoration: underline; font-size: 12px; }
+  @media (prefers-color-scheme: dark) { .meta button { color: var(--brand); } }
+
+  .foot { text-align: center; font-size: 13px; color: var(--muted); margin-top: 20px; }
+  .foot a { color: inherit; }
+
+  dialog { border: 0; border-radius: 16px; padding: 20px; width: min(92vw, 380px); background: var(--card); color: var(--ink); }
+  dialog::backdrop { background: rgba(16, 22, 12, .5); }
+  dialog h3 { margin: 0 0 6px; font-size: 17px; }
+  dialog p { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+  dialog input { width: 100%; height: 46px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font-size: 18px; letter-spacing: .15em; background: var(--field); }
+  dialog .err { color: var(--danger); font-size: 13px; min-height: 18px; margin: 6px 0 0; }
+  dialog .btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .btn { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 0 16px; min-height: 42px; font-weight: 600; }
+  .btn.primary { background: var(--brand-deep); border-color: var(--brand-deep); color: #fff; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <img src="logo.svg" alt="Grace Baptist Church">
+    <h1>Music Schedule Editor</h1>
+  </header>
+  <nav class="bar" aria-label="Services"><div class="chips" id="chips"></div></nav>
+  <main id="main"><p class="msg">Loading the schedule…</p></main>
+
+  <datalist id="people"></datalist>
+  <datalist id="songs"></datalist>
+
+  <dialog id="codeDialog">
+    <form id="codeForm">
+      <h3>Order of service code</h3>
+      <p>The same code the builder asks for. This phone remembers it.</p>
+      <input id="codeInput" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Code">
+      <p class="err" id="codeErr"></p>
+      <div class="btns"><button type="button" class="btn" id="codeCancel">Cancel</button><button class="btn primary">OK</button></div>
+    </form>
+  </dialog>
+
+<script>
+(() => {
+  // The Music Schedule Sheet's web app (Code.gs), the same one the volunteer page and builder use.
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyN_FOd4twDKmMrDk5l3NqTmKRJrKhIC3kUgkuumCKGoxK_wlkFxZlWevtGUyPtSnPE8Q/exec';
+  const CODE_KEY = 'gbc-oos-code';   // shared with the builder
+  const SERVICE_LABEL = { 'Sunday AM': 'Morning', 'Sunday PM': 'Evening', 'Wednesday': 'Evening' };
+  const SERVICE_TITLE = { 'Sunday AM': 'Sunday Morning', 'Sunday PM': 'Sunday Evening', 'Wednesday': 'Wednesday Evening' };
+  const NOTES_ROLE = 'Service Notes';
+  const SONG_SECTION = 'Songs';
+  const STALE_MS = 60 * 1000;   // reload when the page comes back after a minute away
+
+  const $ = (sel) => document.querySelector(sel);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function store(fn) { try { return fn(window.localStorage); } catch (e) { return null; } }
+  function parseDate(key) { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); }
+  const fmt = (key, opts) => parseDate(key).toLocaleDateString('en-US', opts);
+
+  let data = null;        // the editData reply
+  let loadedAt = 0;
+  let current = '';       // "2026-11-08|Sunday AM"
+  let saving = 0;
+
+  // ---------- Talking to the Sheet ----------
+  async function post(body) {
+    let res;
+    try {
+      const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body) });
+      res = await r.json();
+    } catch (e) {
+      throw new Error('Couldn’t reach the Sheet. Check your connection and try again.');
+    }
+    if (res.status === 'error') throw new Error(res.message);
+    return res;
+  }
+
+  function askCode(message) {
+    return new Promise((resolve) => {
+      const d = $('#codeDialog');
+      $('#codeErr').textContent = message || '';
+      $('#codeInput').value = '';
+      d.showModal();
+      $('#codeInput').focus();
+      $('#codeCancel').onclick = () => { d.close(); resolve(null); };
+      $('#codeForm').onsubmit = (e) => { e.preventDefault(); const v = $('#codeInput').value.trim(); d.close(); resolve(v || null); };
+    });
+  }
+
+  async function withCode(action, fields) {
+    let code = store((s) => s.getItem(CODE_KEY));
+    let message = '';
+    for (;;) {
+      if (!code) code = await askCode(message);
+      if (!code) throw new Error('The editor needs the order of service code.');
+      const res = await post(Object.assign({ action, code }, fields || {}));
+      if (res.status === 'badcode') { store((s) => s.removeItem(CODE_KEY)); code = null; message = 'That code isn’t right. Try again.'; continue; }
+      store((s) => s.setItem(CODE_KEY, code));
+      return res;
+    }
+  }
+
+  // ---------- Loading ----------
+  async function load() {
+    const btn = $('#reload');
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+    try {
+      data = await withCode('editData');
+      loadedAt = Date.now();
+      $('#people').innerHTML = data.people.map((p) => '<option value="' + esc(p) + '">').join('');
+      $('#songs').innerHTML = data.songs.map((p) => '<option value="' + esc(p) + '">').join('');
+      const keys = data.services.map(keyOf);
+      const want = decodeURIComponent(location.hash.slice(1));
+      if (!keys.includes(current)) current = keys.includes(want) ? want : (keys[0] || '');
+      render();
+    } catch (err) {
+      $('#main').innerHTML = '<p class="msg err">' + esc(err.message) + ' <button class="reload" id="retry">Try again</button></p>';
+      $('#retry').onclick = load;
+    }
+  }
+
+  const keyOf = (svc) => svc.date + '|' + svc.service;
+  const serviceOf = (key) => data.services.find((s) => keyOf(s) === key);
+
+  // ---------- Showing a service ----------
+  function render() {
+    $('#chips').innerHTML = data.services.map((svc) => {
+      const day = fmt(svc.date, { weekday: 'short', month: 'numeric', day: 'numeric' });
+      return '<button class="chip" data-key="' + esc(keyOf(svc)) + '" aria-pressed="' + (keyOf(svc) === current) + '"><b>' + esc(day) + '</b><span>' +
+        esc(SERVICE_LABEL[svc.service] || svc.service) + '</span></button>';
+    }).join('');
+    const on = $('#chips [aria-pressed="true"]');
+    if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+
+    const svc = serviceOf(current);
+    if (!svc) { $('#main').innerHTML = '<p class="msg">There are no upcoming services on the schedule.</p>'; return; }
+    history.replaceState(null, '', '#' + encodeURIComponent(current));
+    const away = (data.away || {})[current] || [];
+
+    // Rows grouped by section, in the Sheet's order; Service Notes (no section) first.
+    const groups = [];
+    svc.rows.forEach((row, i) => {
+      const name = row.section || 'Notes';
+      let g = groups.find((x) => x.name === name);
+      if (!g) { g = { name, rows: [] }; groups.push(g); }
+      g.rows.push(i);
+    });
+    groups.sort((a, b) => (b.name === 'Notes') - (a.name === 'Notes'));
+
+    const time = new Date(loadedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    $('#main').innerHTML =
+      '<div class="head"><div><h2>' + esc(SERVICE_TITLE[svc.service] || svc.service) + '</h2><p>' +
+      esc(fmt(svc.date, { weekday: 'long', month: 'long', day: 'numeric' })) + ' · loaded ' + esc(time) + '</p></div>' +
+      '<button class="reload" id="reload">Reload</button></div>' +
+      (away.length ? '<div class="banner">Marked out on the Away tab: <b>' + esc(away.join(', ')) + '</b></div>' : '') +
+      groups.map((g) => '<section class="card"><h3>' + esc(g.name) + '</h3>' + g.rows.map((i) => rowHtml(svc, i)).join('') + '</section>').join('') +
+      '<p class="foot">Changes save to the Music Schedule Sheet as soon as you leave a box.<br><a href="builder.html">Order of service builder</a></p>';
+    $('#reload').onclick = load;
+    svc.rows.forEach((row, i) => paintMeta(svc, i));
+  }
+
+  function rowHtml(svc, i) {
+    const row = svc.rows[i];
+    const song = row.section === SONG_SECTION;
+    const note = row.role === NOTES_ROLE;
+    const list = song ? 'songs' : note ? '' : 'people';
+    const placeholder = song ? 'Number and title' : note ? 'Nothing special' : 'Nobody';
+    const id = 'f' + i;
+    return '<div class="row" data-i="' + i + '"><label for="' + id + '">' + esc(row.role) + '</label>' +
+      '<input id="' + id + '" value="' + esc(row.value) + '" placeholder="' + placeholder + '"' + (list ? ' list="' + list + '"' : '') +
+      ' autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="' + (note ? 'sentences' : 'words') + '" enterkeyhint="done">' +
+      '<div class="meta"></div></div>';
+  }
+
+  // Someone on the Away tab is in this cell (a cell can have two names, "Isabel Bott & Eliana Worsham").
+  function outIn(value) {
+    const v = value.toLowerCase();
+    return ((data.away || {})[current] || []).filter((n) => n && v.includes(n.toLowerCase()));
+  }
+
+  // The line under a box: rotation or not, away, and the save status.
+  function paintMeta(svc, i, status) {
+    const row = svc.rows[i];
+    const el = document.querySelector('.row[data-i="' + i + '"]');
+    if (!el) return;
+    const out = row.role === NOTES_ROLE || row.section === SONG_SECTION ? [] : outIn(row.value);
+    el.classList.toggle('is-out', out.length > 0);
+    const bits = [];
+    if (status) bits.push(status);
+    if (out.length) bits.push('<span class="out">' + esc(out.join(', ')) + ' marked out</span>');
+    if (!status) {
+      if (row.rot) bits.push('Rotation');
+      else if (row.reset) bits.push((row.value ? 'Changed from the rotation' : 'Blank (rotation has someone)') + ' <button type="button" data-reset="' + i + '">Use rotation</button>');
+    }
+    el.querySelector('.meta').innerHTML = bits.join(' · ');
+  }
+
+  // ---------- Saving ----------
+  async function save(i, reset) {
+    const key = current;
+    const svc = serviceOf(key);
+    const row = svc.rows[i];
+    const input = document.getElementById('f' + i);
+    const value = reset ? '' : input.value.trim();
+    if (!reset && value === row.value) { input.value = row.value; return; }
+    const hadRotation = row.rot || row.reset;
+    input.readOnly = true;
+    saving++;
+    paintMeta(svc, i, 'Saving…');
+    try {
+      const res = await withCode('setCell', { date: svc.date, service: svc.service, role: row.role, value, was: row.value, reset: !!reset });
+      row.value = res.value;
+      row.rot = !!res.rot;
+      row.reset = !row.rot && hadRotation;
+      if (current === key) {
+        input.value = row.value;
+        if (res.status === 'conflict') {
+          paintMeta(svc, i, '<span class="bad">Someone changed this in the Sheet' + (row.value ? ' to “' + esc(row.value) + '”' : '') + '. Your change wasn’t saved; type it again to replace theirs.</span>');
+        } else {
+          paintMeta(svc, i, '<span class="ok">Saved ✓</span>');
+          setTimeout(() => { if (current === key && document.activeElement !== input) paintMeta(svc, i); }, 2500);
+        }
+      }
+    } catch (err) {
+      if (current === key) {
+        paintMeta(svc, i, '<span class="bad">' + esc(err.message) + '</span> <button type="button" data-retry="' + i + '">Try again</button>');
+      }
+    } finally {
+      saving--;
+      input.readOnly = false;
+    }
+  }
+
+  // ---------- Events ----------
+  $('#chips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip || chip.dataset.key === current) return;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();   // saves the open box first
+    current = chip.dataset.key;
+    render();
+    window.scrollTo({ top: 0 });
+  });
+  $('#main').addEventListener('change', (e) => {
+    const row = e.target.closest('.row');
+    if (row && e.target.tagName === 'INPUT') save(Number(row.dataset.i));
+  });
+  $('#main').addEventListener('keydown', (e) => {
+    if (e.target.tagName !== 'INPUT') return;
+    if (e.key === 'Enter') e.target.blur();
+    if (e.key === 'Escape') {   // put the box back the way it was
+      const svc = serviceOf(current);
+      e.target.value = svc.rows[Number(e.target.closest('.row').dataset.i)].value;
+      e.target.blur();
+    }
+  });
+  $('#main').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-reset],[data-retry]');
+    if (!b) return;
+    if (b.dataset.reset) save(Number(b.dataset.reset), true);
+    else save(Number(b.dataset.retry));
+  });
+  // Coming back to the page later: get anything changed in the Sheet meanwhile, unless a box is being edited.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !data || Date.now() - loadedAt < STALE_MS) return;
+    if (saving || (document.activeElement && document.activeElement.tagName === 'INPUT')) return;
+    load();
+  });
+  window.addEventListener('beforeunload', (e) => { if (saving) { e.preventDefault(); e.returnValue = ''; } });
+
+  load();
+})();
+</script>
+</body>
+</html>
