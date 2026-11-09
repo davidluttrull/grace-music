@@ -575,7 +575,18 @@
     else if (fromSheet) order = clone(fromSheet);
     else order = freshOrder(svc);
     order.items.forEach((it) => { it.id = ++uid; });
+    addSecondSpecial(order, svc);
     return { order, dirty };
+  }
+
+  // A second special (the Sheet's Special 2 row) gets its own line right after the first, even in
+  // saved orders and defaults made before that row existed. Weeks with Special 2 blank leave it off.
+  function addSecondSpecial(order, svc) {
+    if (!roleValue(svc, 'Special 2') || order.items.some((it) => it.source === 'Special 2')) return;
+    const item = Object.assign(text('Special', { source: 'Special 2', italic: true }), { id: ++uid });
+    const after = order.items.map((it) => it.source).lastIndexOf('Special');
+    const message = order.items.findIndex((it) => /^(message|sermon)$/i.test(String(it.label || '').trim()));
+    order.items.splice(after >= 0 ? after + 1 : message >= 0 ? message : order.items.length, 0, item);
   }
 
   function chooseDate(dateKey) {

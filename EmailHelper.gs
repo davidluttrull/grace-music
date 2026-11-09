@@ -470,6 +470,7 @@ function giftLines_(s) {
   const out = [];
   if (valueOf_(s, 'Offering')) out.push('Offering: ' + valueOf_(s, 'Offering'));
   if (valueOf_(s, 'Special')) out.push('Special: ' + valueOf_(s, 'Special'));
+  if (valueOf_(s, 'Special 2')) out.push('Special 2: ' + valueOf_(s, 'Special 2'));
   return out;
 }
 

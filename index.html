@@ -424,7 +424,7 @@
   const SERVICE_SHORT = { 'Sunday AM': 'AM', 'Sunday PM': 'PM', 'Wednesday': 'Wed' };
   // Rows in these sections hold song titles and notes, not people.
   const NOT_PEOPLE = ['Songs'];
-  const FREE_TEXT_ROLES = ['Offering', 'Special'];
+  const FREE_TEXT_ROLES = ['Offering', 'Special', 'Special 2'];
   // The row at the top of each service in the Sheet ("Lord's Supper").
   const SERVICE_NOTES = 'Service Notes';
   const serviceNote = (svc) => (svc.items.find((it) => it.role === SERVICE_NOTES) || {}).value || '';
@@ -562,7 +562,7 @@
   function roleLabel(item) {
     if (item.section === 'Congregational Singers') return item.section + ' ' + item.role;
     if (item.role === 'Leading') return 'Leading Singing';
-    if (item.role === 'Special') return 'Special: ' + item.value;
+    if (item.role === 'Special' || item.role === 'Special 2') return 'Special: ' + item.value;
     return item.role;
   }
 
