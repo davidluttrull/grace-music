@@ -903,7 +903,7 @@ const TEAM_STOP_WORDS = ['the', 'a', 'an', 'o', 'oh', 'and', 'to', 'of'];
 
 /** "06_All My Boast Is In Jesus-lead-G.pdf" -> "All My Boast Is In Jesus"; "Come Christians Join To Sing_CCLI-G_4 Part.pdf" -> "Come Christians Join To Sing" */
 function teamPdfTitle_(name) {
-  let base = String(name || '').replace(/\.pdf$/i, '').replace(/^\s*\d{1,2}[_.\s]+(?=\D)/, '').trim();
+  let base = String(name || '').replace(/\.pdf$/i, '').replace(/^\s*\d{1,2}[a-z]?[_.\s]+(?=\D)/i, '').trim();
   if (base.indexOf(' ') === -1 && base.split('_').length >= 5) base = base.replace(/_/g, ' ');   // "all_i_have_is_christ_HYMN"
   return base.split('_')[0].split(/\s+[-–]\s+/)[0].split(/-(?:lead|vocal)\b/i)[0].replace(/\s+copy$/i, '').trim() || base;
 }
