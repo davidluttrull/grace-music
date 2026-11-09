@@ -850,15 +850,21 @@ function teamFile_(body) {
 }
 
 const TEAM_REREAD_SECONDS = 5 * 60;      // the app's "check Drive now" is honored at most this often
+const PDF_KEYS_SHEET = 'PDF Keys';       // Song PDF | Folder | Key | How the key was found | Drive file ID
 
 /**
  * POST {action: 'teamSongs', key, refresh}: the app's song library, every PDF in
  * Song PDFs (the packet page's listing, up to six hours old):
- * { updated, files: [{ id, name, folder, size, modified, song, title, key }],
+ * { updated, files: [{ id, name, folder, size, modified, song, title, key, original }],
  *   songs: [{ id, num, title, other, category, removed }] }
  * song is the Songs tab ID the PDF belongs to (matched by its title or other
  * names, like the packet page), or "t:<title words>" when it isn't on the Songs
- * tab, so the app can put a song's PDFs together. refresh reads Drive again.
+ * tab, so the app can put a song's PDFs together. key comes from the PDF Keys
+ * tab when it has a row for the file, else from the name ("_CCLI-G_" -> G).
+ * original is true when the name gives no key: David names a PDF in its
+ * default key without one ("How Great Thou Art_CCLI_4 Part"), and a
+ * transposed one with it ("How Great Thou Art_CCLI-G_4 Part").
+ * refresh reads Drive again.
  */
 function teamSongs_(body) {
   const refused = checkTeamKey_(body.key);
@@ -877,8 +883,10 @@ function teamSongs_(body) {
   });
   const exact = {};
   names.forEach((n) => { const k = n.key.join(' '); if (k && !(k in exact)) exact[k] = n.s; });
+  const keys = pdfKeys_();
   const files = pdfIndex_(refresh).map((f) => {
     const title = teamPdfTitle_(f.name);
+    const nameKey = teamKeyFromName_(f.name);
     const all = teamAllWords_(title);
     const key = teamKeyWords_(all);
     let row = exact[key.join(' ')] || null;
@@ -887,12 +895,25 @@ function teamSongs_(body) {
       names.forEach((n) => { const sc = teamScore_(n, all, key); if (sc > best) { best = sc; row = n.s; } });
     }
     return { id: f.id, name: f.name, folder: f.folder, size: f.size, modified: f.modified,
-      song: row ? row.id : 't:' + (key.join(' ') || f.id), title: row ? row.title : title, key: teamKeyFromName_(f.name) };
+      song: row ? row.id : 't:' + (key.join(' ') || f.id), title: row ? row.title : title,
+      key: keys[f.id] || nameKey, original: !nameKey && !!keys[f.id] };
   });
   return {
     status: 'ok', updated: new Date().toISOString(), files: files,
     songs: rows.map((s) => ({ id: s.id, num: s.num, title: s.title, other: s.other, category: s.cat, removed: s.removed })),
   };
+}
+
+/** The PDF Keys tab: Drive file id -> key, for PDFs whose names don't say. */
+function pdfKeys_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(PDF_KEYS_SHEET);
+  const out = {};
+  if (!sheet || sheet.getLastRow() < 2) return out;
+  sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getDisplayValues().forEach((r) => {
+    const id = String(r[4]).trim(), key = String(r[2]).trim().replace('♭', 'b').replace('♯', '#');
+    if (id && /^[A-G][b#]?m?$/.test(key)) out[id] = key;
+  });
+  return out;
 }
 
 // Title matching for the library. Stricter than the packet page's (where David
