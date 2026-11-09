@@ -962,7 +962,7 @@ function teamKeyFromName_(name) {
   const b = String(name || '').replace(/\.pdf$/i, '');
   const K = '([A-G](?:b|#|♭|♯)?m?)';
   const patterns = [
-    new RegExp('(?:^|[_\\s(])(?:CCLI|Getty|Grace|GraceMusic|HoG|GM|Rejoice|PraiseCharts|SG|Hymn|Lead|Sing|Wilds|Majesty)-' + K + '(?=$|[_\\s).-])'),
+    new RegExp('(?:^|[_\\s(])(?:CCLI|Getty|Grace|GraceMusic|HoG|GM|T4G|Rejoice|PraiseCharts|SG|Hymn|Lead|Sing|Wilds|Majesty)-' + K + '(?=$|[_\\s).-])'),
     new RegExp('_' + K + '(?=_|$)'),
     new RegExp('\\(' + K + '\\)'),
     new RegExp('-(?:lead|vocal|chords?)-' + K + '(?=$|[_\\s.-])'),
