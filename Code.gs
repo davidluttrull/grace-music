@@ -261,6 +261,7 @@ function doPost(e) {
     if (body && body.action === 'saveOrderPdf') return json_(saveOrderPdf_(body));
     if (body && body.action === 'team') return json_(teamFeed_(body));
     if (body && body.action === 'teamFile') return json_(teamFile_(body));
+    if (body && body.action === 'teamSongs') return json_(teamSongs_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -833,19 +834,117 @@ function teamDocuments_(date, services) {
   return out;
 }
 
-/** POST {action: 'teamFile', key, id}: one PDF from the team feed, as base64. */
+/** POST {action: 'teamFile', key, id}: one PDF from the team feed or Song PDFs, as base64. */
 function teamFile_(body) {
   const refused = checkTeamKey_(body.key);
   if (refused) return refused;
   const id = String(body.id || '');
   let allowed = JSON.parse(CacheService.getScriptCache().get(TEAM_FILES_KEY) || 'null');
-  if (!allowed || allowed.indexOf(id) === -1) {
+  if ((!allowed || allowed.indexOf(id) === -1) && !pdfIndex_(false).some((f) => f.id === id)) {
     teamFeed_(body);   // the cache ran out, or the feed changed since the app read it
     allowed = JSON.parse(CacheService.getScriptCache().get(TEAM_FILES_KEY) || '[]');
+    if (allowed.indexOf(id) === -1) throw new Error('That file isn’t in this week’s music or Song PDFs anymore. Pull down to refresh.');
   }
-  if (allowed.indexOf(id) === -1) throw new Error('That file isn’t in this week’s music anymore. Pull down to refresh.');
   const file = DriveApp.getFileById(id);
   return { status: 'ok', id: id, updated: file.getLastUpdated().toISOString(), data: Utilities.base64Encode(file.getBlob().getBytes()) };
+}
+
+const TEAM_REREAD_SECONDS = 5 * 60;      // the app's "check Drive now" is honored at most this often
+
+/**
+ * POST {action: 'teamSongs', key, refresh}: the app's song library, every PDF in
+ * Song PDFs (the packet page's listing, up to six hours old):
+ * { updated, files: [{ id, name, folder, size, modified, song, title }],
+ *   songs: [{ id, num, title, other, category, removed }] }
+ * song is the Songs tab ID the PDF belongs to (matched by its title or other
+ * names, like the packet page), or "t:<title words>" when it isn't on the Songs
+ * tab, so the app can put a song's PDFs together. refresh reads Drive again.
+ */
+function teamSongs_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const cache = CacheService.getScriptCache();
+  const refresh = !!body.refresh && !cache.get('teamReread');
+  if (refresh) cache.put('teamReread', '1', TEAM_REREAD_SECONDS);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SONGS_SHEET);
+  const rows = sheet ? readSongs_(sheet).filter((s) => s.title && s.id) : [];
+  const names = [];
+  rows.forEach((s) => {
+    [s.title].concat(s.other ? s.other.split(/\s*;\s*/) : []).forEach((n) => {
+      const all = teamAllWords_(n);
+      if (all.length) names.push({ all: all, key: teamKeyWords_(all), versioned: /\(/.test(n), s: s });
+    });
+  });
+  const exact = {};
+  names.forEach((n) => { const k = n.key.join(' '); if (k && !(k in exact)) exact[k] = n.s; });
+  const files = pdfIndex_(refresh).map((f) => {
+    const title = teamPdfTitle_(f.name);
+    const all = teamAllWords_(title);
+    const key = teamKeyWords_(all);
+    let row = exact[key.join(' ')] || null;
+    if (!row && key.length) {
+      let best = 0;
+      names.forEach((n) => { const sc = teamScore_(n, all, key); if (sc > best) { best = sc; row = n.s; } });
+    }
+    return { id: f.id, name: f.name, folder: f.folder, size: f.size, modified: f.modified,
+      song: row ? row.id : 't:' + (key.join(' ') || f.id), title: row ? row.title : title };
+  });
+  return {
+    status: 'ok', updated: new Date().toISOString(), files: files,
+    songs: rows.map((s) => ({ id: s.id, num: s.num, title: s.title, other: s.other, category: s.cat, removed: s.removed })),
+  };
+}
+
+// Title matching for the library. Stricter than the packet page's (where David
+// picks from the matches): a PDF joins a Songs tab song only when the titles are
+// the same, differ by a typo, or one starts the other ("It Is Well With My
+// Soul" -> "It Is Well"). Anything else is its own song in the library.
+const TEAM_STOP_WORDS = ['the', 'a', 'an', 'o', 'oh', 'and', 'to', 'of'];
+
+/** "06_All My Boast Is In Jesus-lead-G.pdf" -> "All My Boast Is In Jesus"; "Come Christians Join To Sing_CCLI-G_4 Part.pdf" -> "Come Christians Join To Sing" */
+function teamPdfTitle_(name) {
+  let base = String(name || '').replace(/\.pdf$/i, '').replace(/^\s*\d{1,2}[_.\s]+(?=\D)/, '').trim();
+  if (base.indexOf(' ') === -1 && base.split('_').length >= 5) base = base.replace(/_/g, ' ');   // "all_i_have_is_christ_HYMN"
+  return base.split('_')[0].split(/\s+[-–]\s+/)[0].split(/-(?:lead|vocal)\b/i)[0].replace(/\s+copy$/i, '').trim() || base;
+}
+
+/** Every word, lowercase, without accents, apostrophes or anything in parentheses. */
+function teamAllWords_(t) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/&/g, ' and ').replace(/['’]/g, '').replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
+    .split(' ').filter(Boolean);
+}
+
+function teamKeyWords_(all) {
+  return all.filter((w) => TEAM_STOP_WORDS.indexOf(w) === -1);
+}
+
+/** 0 = not the same song; higher is a closer match. */
+function teamScore_(name, fileAll, fileKey) {
+  const a = name.key, b = fileKey;
+  if (a.length >= 3 && a.length === b.length &&
+      a.every((w, i) => w === b[i] || (w.length >= 5 && teamOneEdit_(w, b[i])))) return 90;
+  // One title starts the other, word for word ("O" and "Oh" alike), and the shorter has three words or more.
+  // Not for a Songs tab title naming its version, like "Behold the Lamb (Communion Hymn)".
+  if (name.versioned) return 0;
+  const x = name.all.map((w) => (w === 'oh' ? 'o' : w)), y = fileAll.map((w) => (w === 'oh' ? 'o' : w));
+  const short = x.length <= y.length ? x : y, long = short === x ? y : x;
+  if (short.length >= 3 && teamKeyWords_(short).length >= 2 && short.every((w, i) => w === long[i])) return 50 + short.length;
+  return 0;
+}
+
+/** True when two words differ by one letter added, dropped or changed ("womdrous", "wondrous"). */
+function teamOneEdit_(a, b) {
+  if (!b || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
 }
 
 // ---------- Song packets ----------
