@@ -851,6 +851,9 @@ function teamFile_(body) {
 
 const TEAM_REREAD_SECONDS = 5 * 60;      // the app's "check Drive now" is honored at most this often
 const PDF_KEYS_SHEET = 'PDF Keys';       // Song PDF | Folder | Key | How the key was found | Drive file ID
+// Song PDFs the iPads' song library leaves out (the packet page still lists them).
+const TEAM_HIDDEN_FOLDERS = ['Secular Love Songs'];     // top folders in Song PDFs
+const TEAM_HIDDEN_FILES = [/^Hymns of Grace_MacArthur\.pdf$/i];   // whole-book PDFs
 
 /**
  * POST {action: 'teamSongs', key, refresh}: the app's song library, every PDF in
@@ -866,6 +869,12 @@ const PDF_KEYS_SHEET = 'PDF Keys';       // Song PDF | Folder | Key | How the ke
  * transposed one with it ("How Great Thou Art_CCLI-G_4 Part").
  * refresh reads Drive again.
  */
+/** False for the Song PDFs the iPads' library leaves out (TEAM_HIDDEN_FOLDERS, TEAM_HIDDEN_FILES). */
+function teamShows_(f) {
+  const top = String(f.folder || '').split(' / ')[0];
+  return TEAM_HIDDEN_FOLDERS.indexOf(top) === -1 && !TEAM_HIDDEN_FILES.some((rx) => rx.test(f.name));
+}
+
 function teamSongs_(body) {
   const refused = checkTeamKey_(body.key);
   if (refused) return refused;
@@ -884,7 +893,7 @@ function teamSongs_(body) {
   const exact = {};
   names.forEach((n) => { const k = n.key.join(' '); if (k && !(k in exact)) exact[k] = n.s; });
   const keys = pdfKeys_();
-  const files = pdfIndex_(refresh).map((f) => {
+  const files = pdfIndex_(refresh).filter(teamShows_).map((f) => {
     const title = teamPdfTitle_(f.name);
     const nameKey = teamKeyFromName_(f.name);
     const all = teamAllWords_(title);
