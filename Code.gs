@@ -259,6 +259,8 @@ function doPost(e) {
     if (body && body.action === 'uploadPdf') return json_(uploadPdf_(body));
     if (body && body.action === 'savePacket') return json_(savePacket_(body));
     if (body && body.action === 'saveOrderPdf') return json_(saveOrderPdf_(body));
+    if (body && body.action === 'team') return json_(teamFeed_(body));
+    if (body && body.action === 'teamFile') return json_(teamFile_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -719,6 +721,131 @@ function setupOrderCode() {
     props.setProperty('ORDER_CODE', code);
   }
   console.log('Order of service code: ' + code);
+}
+
+// ---------- Team iPad app ----------
+//
+// The music team's iPads (church-owned, set up through Mosyle) show the coming
+// services: each one's order (order.view, saved by the builder), its songs as
+// the separate PDFs and pages picked on the song packet page, and the order of
+// service PDF. The app sends TEAM_KEY, a long random key set up once on each
+// iPad, so nobody types a code but the music isn't open to the internet. It can
+// only download files that are in the feed.
+
+const TEAM_DAYS_AHEAD = 14;               // services from today through two weeks out
+const TEAM_FILES_KEY = 'teamFiles';       // the file ids the app may download, kept in the script cache
+const TEAM_FILES_SECONDS = 6 * 60 * 60;
+
+/** Run once from the editor: makes the team app's key and prints it in the log. Running it again shows the same key. */
+function setupTeamApp() {
+  const props = PropertiesService.getScriptProperties();
+  let key = props.getProperty('TEAM_KEY');
+  if (!key) {
+    key = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+    props.setProperty('TEAM_KEY', key);
+  }
+  console.log('Team app key: ' + key);
+}
+
+/** null if the key is right, otherwise the reply to send back. */
+function checkTeamKey_(key) {
+  const want = PropertiesService.getScriptProperties().getProperty('TEAM_KEY');
+  if (!want) throw new Error('The team app isn’t set up yet. In Apps Script, run setupTeamApp once.');
+  const cache = CacheService.getScriptCache();
+  const bad = Number(cache.get('badTeamKeys') || 0);
+  if (bad >= MAX_BAD_CODES) throw new Error('Too many wrong keys. Try again in 10 minutes.');
+  if (String(key || '').trim() === want) return null;
+  cache.put('badTeamKeys', String(bad + 1), 600);
+  return { status: 'badkey', message: 'This iPad’s key isn’t right. Ask David to set it up again.' };
+}
+
+/**
+ * POST {action: 'team', key}: the coming services, by day:
+ * { days: [{ date, documents: [{ id, name, updated, size }],
+ *            services: [{ service, label, cancelled, note, view, songs: [{ title, file, pages, name, modified, size }] }] }] }
+ * view is the builder's finished order (null until the order is saved), songs the
+ * packet page's picks for that service (empty until its packet is saved).
+ */
+function teamFeed_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const tz = Session.getScriptTimeZone();
+  const from = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  const until = Utilities.formatDate(new Date(Date.now() + TEAM_DAYS_AHEAD * 86400000), tz, 'yyyy-MM-dd');
+  const services = upcomingServices_().filter((svc) => svc.date >= from && svc.date <= until);
+  const orders = savedOrders_(false).orders;
+  const props = PropertiesService.getScriptProperties().getProperties();
+  const index = {};
+  pdfIndex_(false).forEach((f) => { index[f.id] = f; });
+  const allowed = {};
+  const days = [];
+  services.forEach((svc) => {
+    let day = days.filter((d) => d.date === svc.date)[0];
+    if (!day) {
+      day = { date: svc.date, documents: teamDocuments_(svc.date, services.filter((x) => x.date === svc.date)), services: [] };
+      day.documents.forEach((d) => { allowed[d.id] = true; });
+      days.push(day);
+    }
+    const note = (svc.items.filter((it) => it.role === NOTES_ROLE)[0] || {}).value || '';
+    const order = orders[svc.date + '|' + svc.service];
+    let packet = null;
+    try { packet = JSON.parse(props['packet|' + svc.date + '|' + svc.service] || 'null'); } catch (err) { /* none */ }
+    const songs = ((packet && packet.items) || []).filter((it) => it && it.file && !it.skip).map((it) => {
+      allowed[it.file] = true;
+      const f = index[it.file] || {};
+      return { title: String(it.title || f.name || ''), file: it.file, pages: Array.isArray(it.pages) ? it.pages : null,
+        name: f.name || '', modified: f.modified || '', size: f.size || 0 };
+    });
+    day.services.push({
+      service: svc.service,
+      label: SERVICE_LABEL[svc.service] || svc.service,
+      cancelled: CANCELLED_NOTE.test(note),
+      note: note,
+      view: (order && order.view) || null,
+      songs: songs,
+    });
+  });
+  CacheService.getScriptCache().put(TEAM_FILES_KEY, JSON.stringify(Object.keys(allowed)), TEAM_FILES_SECONDS);
+  return { status: 'ok', updated: new Date().toISOString(), days: days };
+}
+
+/** The order of service PDFs for a day: the musicians' copy when there is one, else the regular one. */
+function teamDocuments_(date, services) {
+  const folder = monthFolder_(date, false);
+  if (!folder) return [];
+  const names = [];
+  services.forEach((svc) => {
+    if (svc.service === 'Sunday AM' || svc.service === 'Sunday PM') names.push([date + '_Musicians Order of Service.pdf', date + '_Order of Service.pdf']);
+    else if (svc.service === 'Wednesday') names.push([date + '_Wednesday Order of Service.pdf']);
+    else names.push([date + '_' + svc.service + ' Order of Service.pdf']);
+  });
+  const out = [];
+  names.forEach((choices) => {
+    for (let i = 0; i < choices.length; i++) {
+      if (out.some((d) => d.name === choices[i])) return;
+      const f = newestFile_(folder, choices[i]);
+      if (f) {
+        out.push({ id: f.getId(), name: choices[i], updated: f.getLastUpdated().toISOString(), size: f.getSize() });
+        return;
+      }
+    }
+  });
+  return out;
+}
+
+/** POST {action: 'teamFile', key, id}: one PDF from the team feed, as base64. */
+function teamFile_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const id = String(body.id || '');
+  let allowed = JSON.parse(CacheService.getScriptCache().get(TEAM_FILES_KEY) || 'null');
+  if (!allowed || allowed.indexOf(id) === -1) {
+    teamFeed_(body);   // the cache ran out, or the feed changed since the app read it
+    allowed = JSON.parse(CacheService.getScriptCache().get(TEAM_FILES_KEY) || '[]');
+  }
+  if (allowed.indexOf(id) === -1) throw new Error('That file isn’t in this week’s music anymore. Pull down to refresh.');
+  const file = DriveApp.getFileById(id);
+  return { status: 'ok', id: id, updated: file.getLastUpdated().toISOString(), data: Utilities.base64Encode(file.getBlob().getBytes()) };
 }
 
 // ---------- Song packets ----------

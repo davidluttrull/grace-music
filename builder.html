@@ -974,6 +974,37 @@
 
   const leaderOf = (part) => roleValue(part.svc, 'Leading') || roleValue(part.svc, 'Song Leading') || part.order.leader || '';
 
+  // The finished order the way the sheet prints it, saved with the order as order.view so the team
+  // iPad app (and its widget) show exactly what the builder shows without repeating its rules.
+  function viewFor(part) {
+    const svc = part.svc;
+    const off = partOff(part);
+    const team = [];
+    const add = (group, role, label) => { const v = roleValue(svc, role); if (v) team.push({ group, role: label, name: v }); };
+    MUSIC.forEach(([role, label]) => { if (label !== 'Leader') add('Accompanists', role, label); });
+    SINGER_ROWS.forEach((row) => row.forEach((role) => add('Singers', role, role)));
+    MEDIA.forEach(([role, label]) => add('Media', role, label));
+    return {
+      service: SERVICE_LABEL[svc.service] || svc.service,
+      date: svc.date,
+      time: roleValue(svc, 'Time'),
+      note: noteOf(part),
+      cancelled: off,
+      leader: leaderOf(part),
+      items: off ? [] : part.order.items.filter((it) => prints(it, svc)).map((it) => {
+        const value = shown(it, svc);
+        const line = { label: it.label || '', note: it.note || '', value };
+        if (it.kind === 'song') {
+          const s = parseSong(value);
+          Object.assign(line, { song: true, num: s.num, title: s.title, isNew: s.isNew, verses: it.verses || '',
+            arrangement: String(arrangementOf(it, svc).text || '').trim() });
+        }
+        return line;
+      }),
+      team: part.order.credits !== false ? team : [],
+    };
+  }
+
   function headerRight(part) {
     const svc = part.svc;
     const parts = [fmt(svc.date, { month: 'long', day: 'numeric', year: 'numeric' })];
@@ -1260,6 +1291,7 @@
         }
         const order = clone(part.order);
         order.savedAt = Date.now();
+        order.view = viewFor(part);
         order.items.forEach((it) => { delete it.id; });
         if (!(await send(part.key, order))) return;
         saved.orders[part.key] = order;
