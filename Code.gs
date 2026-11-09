@@ -965,13 +965,13 @@ function teamScore_(name, fileAll, fileKey) {
 
 /**
  * The key a PDF's name gives, or '': "How Great Thou Art_CCLI-G_4 Part" -> "G",
- * "Getty-D", "_F_Lead", "(Bb)", "-lead-Dm", "Key of Eb".
+ * any "Source-Key" ("Getty-D", "T4G-D", "Praise-Ab"), "_F_Lead", "(Bb)", "-lead-Dm", "Key of Eb".
  */
 function teamKeyFromName_(name) {
   const b = String(name || '').replace(/\.pdf$/i, '');
   const K = '([A-G](?:b|#|♭|♯)?m?)';
   const patterns = [
-    new RegExp('(?:^|[_\\s(])(?:CCLI|Getty|Grace|GraceMusic|HoG|GM|T4G|Rejoice|PraiseCharts|SG|Hymn|Lead|Sing|Wilds|Majesty)-' + K + '(?=$|[_\\s).-])'),
+    new RegExp('(?:^|[_\\s(])[A-Za-z][A-Za-z0-9+]*-' + K + '(?=$|[_\\s).-])'),
     new RegExp('_' + K + '(?=_|$)'),
     new RegExp('\\(' + K + '\\)'),
     new RegExp('-(?:lead|vocal|chords?)-' + K + '(?=$|[_\\s.-])'),
