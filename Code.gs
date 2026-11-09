@@ -854,7 +854,7 @@ const TEAM_REREAD_SECONDS = 5 * 60;      // the app's "check Drive now" is honor
 /**
  * POST {action: 'teamSongs', key, refresh}: the app's song library, every PDF in
  * Song PDFs (the packet page's listing, up to six hours old):
- * { updated, files: [{ id, name, folder, size, modified, song, title }],
+ * { updated, files: [{ id, name, folder, size, modified, song, title, key }],
  *   songs: [{ id, num, title, other, category, removed }] }
  * song is the Songs tab ID the PDF belongs to (matched by its title or other
  * names, like the packet page), or "t:<title words>" when it isn't on the Songs
@@ -887,7 +887,7 @@ function teamSongs_(body) {
       names.forEach((n) => { const sc = teamScore_(n, all, key); if (sc > best) { best = sc; row = n.s; } });
     }
     return { id: f.id, name: f.name, folder: f.folder, size: f.size, modified: f.modified,
-      song: row ? row.id : 't:' + (key.join(' ') || f.id), title: row ? row.title : title };
+      song: row ? row.id : 't:' + (key.join(' ') || f.id), title: row ? row.title : title, key: teamKeyFromName_(f.name) };
   });
   return {
     status: 'ok', updated: new Date().toISOString(), files: files,
@@ -931,6 +931,30 @@ function teamScore_(name, fileAll, fileKey) {
   const short = x.length <= y.length ? x : y, long = short === x ? y : x;
   if (short.length >= 3 && teamKeyWords_(short).length >= 2 && short.every((w, i) => w === long[i])) return 50 + short.length;
   return 0;
+}
+
+/**
+ * The key a PDF's name gives, or '': "How Great Thou Art_CCLI-G_4 Part" -> "G",
+ * "Getty-D", "_F_Lead", "(Bb)", "-lead-Dm", "Key of Eb".
+ */
+function teamKeyFromName_(name) {
+  const b = String(name || '').replace(/\.pdf$/i, '');
+  const K = '([A-G](?:b|#|♭|♯)?m?)';
+  const patterns = [
+    new RegExp('(?:^|[_\\s(])(?:CCLI|Getty|Grace|GraceMusic|HoG|GM|Rejoice|PraiseCharts|SG|Hymn|Lead)-' + K + '(?=$|[_\\s).-])'),
+    new RegExp('_' + K + '(?=_|$)'),
+    new RegExp('\\(' + K + '\\)'),
+    new RegExp('-(?:lead|vocal|chords?)-' + K + '(?=$|[_\\s.-])'),
+    new RegExp('\\b[Kk]ey of ' + K + '\\b'),
+    new RegExp('\\s-\\s' + K + '\\s-\\s'),
+    new RegExp('_' + K + '\\s(?:Lead|Hymn|Choral|Chords)'),
+    new RegExp('\\s' + K + '_(?:Lead|Hymn)'),
+  ];
+  for (let i = 0; i < patterns.length; i++) {
+    const m = patterns[i].exec(b);
+    if (m) return m[1].replace('♭', 'b').replace('♯', '#');
+  }
+  return '';
 }
 
 /** True when two words differ by one letter added, dropped or changed ("womdrous", "wondrous"). */
