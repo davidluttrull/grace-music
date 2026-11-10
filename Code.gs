@@ -90,6 +90,7 @@ const UPLOADS_FOLDER = 'Added from the packet page';      // inside Song PDFs
 const PACKET_SUFFIX = { 'Sunday AM': 'AM', 'Sunday PM': 'PM', 'Wednesday': 'Wed' };
 const PDF_INDEX_KEY = 'pdfIndex';                          // the folder listing, kept in the script cache
 const PDF_INDEX_SECONDS = 6 * 60 * 60;
+const PDF_INDEX_STAMP = 'pdfIndexStamp';
 const MAX_PDF_BYTES = 15 * 1024 * 1024;                    // the whole-hymnal PDFs are left out
 const MAX_PACKET_BYTES = 40 * 1024 * 1024;
 const PACKET_DAYS_KEPT = 120;                              // what was in each packet, for reopening it
@@ -263,6 +264,7 @@ function doPost(e) {
     if (body && body.action === 'teamFile') return json_(teamFile_(body));
     if (body && body.action === 'teamSongs') return json_(teamSongs_(body));
     if (body && body.action === 'teamPlaylist') return json_(teamPlaylist_(body));
+    if (body && body.action === 'teamUpload') return json_(teamUpload_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -800,9 +802,10 @@ function teamFeed_(body) {
         name: f.name || '', modified: f.modified || '', size: f.size || 0 };
     });
     // No packet saved yet: link the order's songs to their PDFs automatically.
+    const missing = [];
     if (!packet && !CANCELLED_NOTE.test(note)) {
       if (!auto) auto = teamAutoContext_(props, index);
-      songs = teamAutoSongs_(teamServiceSongs_(svc, order), auto);
+      songs = teamAutoSongs_(teamServiceSongs_(svc, order), auto, missing);
       songs.forEach((s) => { allowed[s.file] = true; });
     }
     day.services.push({
@@ -812,6 +815,7 @@ function teamFeed_(body) {
       note: note,
       view: (order && order.view) || null,
       songs: songs,
+      missing: missing,
     });
   });
   CacheService.getScriptCache().put(TEAM_FILES_KEY, JSON.stringify(Object.keys(allowed)), TEAM_FILES_SECONDS);
@@ -833,7 +837,7 @@ function teamAutoContext_(props, index) {
   const rows = teamSongRows_();
   const picks = {};
   Object.keys(props).forEach((k) => { if (k.indexOf('pick|') === 0) picks[k.slice(5)] = props[k]; });
-  return { rows: rows, names: teamSongNames_(rows), picks: picks, index: index,
+  return { rows: rows, names: teamSongNames_(rows), picks: picks, index: index, songOf: teamSongOf_(props),
     files: Object.keys(index).map((id) => index[id]).filter(teamShows_), owners: {} };
 }
 
@@ -851,8 +855,12 @@ function teamServiceSongs_(svc, order) {
   });
 }
 
-/** The songs with a PDF each, in the feed's song format, marked auto with the song's library key. */
-function teamAutoSongs_(lines, ctx) {
+/**
+ * The songs with a PDF each, in the feed's song format, marked auto with the song's library key.
+ * The ones with none go in missing as {title, song, after}: after is how many songs with a PDF
+ * come before it, so an iPad can put a PDF it adds for the song in its place.
+ */
+function teamAutoSongs_(lines, ctx, missing) {
   const out = [];
   lines.forEach((line) => {
     const row = teamOrderRow_(line, ctx.rows);
@@ -868,7 +876,10 @@ function teamAutoSongs_(lines, ctx) {
     } else {
       file = teamBestPdf_(song, key, ctx);
     }
-    if (!file) return;
+    if (!file) {
+      if (missing && key.length) missing.push({ title: title, song: song, after: out.length });
+      return;
+    }
     out.push({ title: title, file: file.id, pages: pages, name: file.name, modified: file.modified || '', size: file.size || 0,
       auto: true, song: song });
   });
@@ -905,7 +916,7 @@ function teamBestPdf_(song, key, ctx) {
     if (!teamKeyWords_(teamAllWords_(teamPdfTitle_(f.name))).some((w) => words[w])) return false;
     if (!(f.id in ctx.owners)) {
       const own = teamRowFor_(f.name, ctx.names);
-      ctx.owners[f.id] = own.row ? own.row.id : 't:' + own.key.join(' ');
+      ctx.owners[f.id] = ctx.songOf[f.id] || (own.row ? own.row.id : 't:' + own.key.join(' '));
     }
     return ctx.owners[f.id] === song;
   });
@@ -1045,20 +1056,95 @@ function teamSongs_(body) {
   const cache = CacheService.getScriptCache();
   const refresh = !!body.refresh && !cache.get('teamReread');
   if (refresh) cache.put('teamReread', '1', TEAM_REREAD_SECONDS);
+  // The iPads ask every few minutes with the stamp of the list they have: nothing to send when Song PDFs hasn't changed.
+  const stamp = cache.get(PDF_INDEX_STAMP);
+  if (!refresh && body.since && stamp && String(body.since) === stamp) return { status: 'ok', same: true, stamp: stamp };
   const rows = teamSongRows_();
   const m = teamSongNames_(rows);
   const keys = pdfKeys_();
-  const files = pdfIndex_(refresh).filter(teamShows_).map((f) => {
-    const nameKey = teamKeyFromName_(f.name);
-    const own = teamRowFor_(f.name, m);
-    return { id: f.id, name: f.name, folder: f.folder, size: f.size, modified: f.modified,
-      song: own.row ? own.row.id : 't:' + (own.key.join(' ') || f.id), title: own.row ? own.row.title : own.title,
-      key: keys[f.id] || nameKey, original: !nameKey && !!keys[f.id] };
-  });
+  const songOf = teamSongOf_(PropertiesService.getScriptProperties().getProperties());
+  const files = pdfIndex_(refresh).filter(teamShows_).map((f) => teamLibraryFile_(f, m, keys, songOf));
   return {
-    status: 'ok', updated: new Date().toISOString(), files: files,
+    status: 'ok', updated: new Date().toISOString(), files: files, stamp: cache.get(PDF_INDEX_STAMP) || '',
     songs: rows.map((s) => ({ id: s.id, num: s.num, title: s.title, other: s.other, category: s.cat, removed: s.removed })),
   };
+}
+
+/** One PDF the way the app's song library lists it. */
+function teamLibraryFile_(f, m, keys, songOf) {
+  const nameKey = teamKeyFromName_(f.name);
+  const own = teamRowFor_(f.name, m);
+  const row = songOf[f.id] ? m.names.map((n) => n.s).filter((s) => s.id === songOf[f.id])[0] : own.row;
+  return { id: f.id, name: f.name, folder: f.folder, size: f.size, modified: f.modified,
+    song: songOf[f.id] || (own.row ? own.row.id : 't:' + (own.key.join(' ') || f.id)),
+    title: row ? row.title : own.title,
+    key: keys[f.id] || nameKey, original: !nameKey && !!keys[f.id] };
+}
+
+// ---------- PDFs added on the team iPads ----------
+// A musician can scan a song's music or choose a PDF on an iPad. It goes to
+// Song PDFs / From the iPads as "<song title>_<what it is>.pdf", and every team
+// iPad lists it with the song's other PDFs within a few minutes (nobody's music
+// changes until they pick it). Automatic picks only come from Congregational
+// Music, so David decides whether it becomes the song's PDF by moving it there
+// (or deleting it). The song it was added for is kept as "songOf|<file id>", so
+// it stays with that song whatever its name matches.
+
+const TEAM_UPLOADS_FOLDER = 'From the iPads';   // inside Song PDFs
+const TEAM_UPLOADS_PER_DAY = 40;
+const TEAM_SONG_OF = 'songOf|';
+
+/** File id -> the song key a PDF was added for on an iPad. */
+function teamSongOf_(props) {
+  const out = {};
+  Object.keys(props).forEach((k) => { if (k.indexOf(TEAM_SONG_OF) === 0) out[k.slice(TEAM_SONG_OF.length)] = props[k]; });
+  return out;
+}
+
+/**
+ * POST {action: 'teamUpload', key, song, title, label, data}: keeps a PDF added
+ * on a team iPad for a song (song is its library key, title its title, label
+ * what it is: "Lead Sheet", "Choir Copy"). Answers with the file as the song
+ * library lists it.
+ */
+function teamUpload_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const cache = CacheService.getScriptCache();
+  const today = Number(cache.get('teamUploads') || 0);
+  if (today >= TEAM_UPLOADS_PER_DAY) throw new Error('That’s a lot of PDFs added today. Try again tomorrow.');
+  const bytes = pdfBytes_(body.data, MAX_PDF_BYTES);
+  // No "_" or " - ": they'd split the title where the library reads it from the name.
+  const clean = (s, n) => String(s || '').replace(/[\\/:*?"<>|_]+/g, ' ').replace(/\s+[-–]\s+/g, ' ')
+    .replace(/\s+/g, ' ').replace(/^[.\s]+/, '').trim().slice(0, n);
+  const title = clean(body.title, 90);
+  if (!title) throw new Error('Which song is this PDF for?');
+  const label = clean(body.label, 40) || 'Added on an iPad';
+  const song = String(body.song || '').trim();
+  const name = title + '_' + label + '.pdf';
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const songFolder = DriveApp.getFolderById(SONG_PDFS_FOLDER);
+    const found = songFolder.getFoldersByName(TEAM_UPLOADS_FOLDER);
+    const folder = found.hasNext() ? found.next() : songFolder.createFolder(TEAM_UPLOADS_FOLDER);
+    const file = folder.createFile(Utilities.newBlob(bytes, 'application/pdf', name));
+    const entry = { id: file.getId(), name: name, folder: TEAM_UPLOADS_FOLDER, size: bytes.length,
+      modified: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd') };
+    const props = PropertiesService.getScriptProperties();
+    const m = teamSongNames_(teamSongRows_());
+    const own = teamRowFor_(name, m);
+    const matched = own.row ? own.row.id : 't:' + own.key.join(' ');
+    if (song && song.length <= 100 && song.indexOf('|') === -1 && song !== matched) props.setProperty(TEAM_SONG_OF + entry.id, song);
+    const files = pdfIndex_(false);
+    if (!files.some((f) => f.id === entry.id)) files.push(entry);
+    cacheIndex_(files);
+    cache.put('teamUploads', String(today + 1), 86400);
+    return { status: 'ok', file: teamLibraryFile_(entry, m, {}, teamSongOf_(props.getProperties())) };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** The Songs tab's songs that have a title and an ID. */
@@ -1156,7 +1242,7 @@ function teamKeyFromName_(name) {
     new RegExp('_' + K + '(?=_|$)'),
     new RegExp('\\(' + K + '\\)'),
     new RegExp('-(?:lead|vocal|chords?)-' + K + '(?=$|[_\\s.-])'),
-    new RegExp('\\b[Kk]ey of ' + K + '\\b'),
+    new RegExp('(?:\\b|_)[Kk]ey of ' + K + '\\b'),   // "_Key of G" too ("_" is a word character)
     new RegExp('\\s-\\s' + K + '\\s-\\s'),
     new RegExp('_' + K + '\\s(?:Lead|Hymn|Choral|Chords)'),
     new RegExp('\\s' + K + '_(?:Lead|Hymn)'),
@@ -1402,6 +1488,7 @@ function cacheIndex_(files) {
   let n = 0;
   for (let i = 0; i < json.length; i += size) parts[PDF_INDEX_KEY + n++] = json.slice(i, i + size);
   parts[PDF_INDEX_KEY] = String(n);
+  parts[PDF_INDEX_STAMP] = String(Date.now());   // changes whenever the list does (teamSongs_ "since")
   CacheService.getScriptCache().putAll(parts, PDF_INDEX_SECONDS);
 }
 
