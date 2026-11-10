@@ -262,6 +262,7 @@ function doPost(e) {
     if (body && body.action === 'team') return json_(teamFeed_(body));
     if (body && body.action === 'teamFile') return json_(teamFile_(body));
     if (body && body.action === 'teamSongs') return json_(teamSongs_(body));
+    if (body && body.action === 'teamPlaylist') return json_(teamPlaylist_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -780,6 +781,7 @@ function teamFeed_(body) {
   pdfIndex_(false).forEach((f) => { index[f.id] = f; });
   const allowed = {};
   const days = [];
+  let auto = null;    // what auto-linking needs, read the first time a service needs it
   services.forEach((svc) => {
     let day = days.filter((d) => d.date === svc.date)[0];
     if (!day) {
@@ -791,12 +793,18 @@ function teamFeed_(body) {
     const order = orders[svc.date + '|' + svc.service];
     let packet = null;
     try { packet = JSON.parse(props['packet|' + svc.date + '|' + svc.service] || 'null'); } catch (err) { /* none */ }
-    const songs = ((packet && packet.items) || []).filter((it) => it && it.file && !it.skip).map((it) => {
+    let songs = ((packet && packet.items) || []).filter((it) => it && it.file && !it.skip).map((it) => {
       allowed[it.file] = true;
       const f = index[it.file] || {};
       return { title: String(it.title || f.name || ''), file: it.file, pages: Array.isArray(it.pages) ? it.pages : null,
         name: f.name || '', modified: f.modified || '', size: f.size || 0 };
     });
+    // No packet saved yet: link the order's songs to their PDFs automatically.
+    if (!packet && !CANCELLED_NOTE.test(note)) {
+      if (!auto) auto = teamAutoContext_(props, index);
+      songs = teamAutoSongs_(teamServiceSongs_(svc, order), auto);
+      songs.forEach((s) => { allowed[s.file] = true; });
+    }
     day.services.push({
       service: svc.service,
       label: SERVICE_LABEL[svc.service] || svc.service,
@@ -807,7 +815,163 @@ function teamFeed_(body) {
     });
   });
   CacheService.getScriptCache().put(TEAM_FILES_KEY, JSON.stringify(Object.keys(allowed)), TEAM_FILES_SECONDS);
-  return { status: 'ok', updated: new Date().toISOString(), days: days };
+  return { status: 'ok', updated: new Date().toISOString(), days: days, playlists: teamPlaylists_(props) };
+}
+
+// ---------- Auto-linking: a service's songs before its packet is saved ----------
+// Until the packet page saves a service's packet, the iPads get each song on the
+// order of service (or the schedule) with a PDF picked automatically: the PDF
+// picked for that song the last time a packet was saved, else the best one in
+// Song PDFs / Congregational Music (4-part or hymn, the original key, the plainest
+// name). A song with neither is left out. Saving the packet replaces all of it.
+
+const TEAM_SONG_ROLE = /^(Song \d+|Closing)$/;     // the schedule's song rows (as on the packet page)
+const TEAM_CONGREGATIONAL = 'Congregational Music'; // the Song PDFs folder automatic picks come from
+
+/** What auto-linking reads once per feed: the Songs tab, the packet page's picks, and the PDFs the iPads can show. */
+function teamAutoContext_(props, index) {
+  const rows = teamSongRows_();
+  const picks = {};
+  Object.keys(props).forEach((k) => { if (k.indexOf('pick|') === 0) picks[k.slice(5)] = props[k]; });
+  return { rows: rows, names: teamSongNames_(rows), picks: picks, index: index,
+    files: Object.keys(index).map((id) => index[id]).filter(teamShows_), owners: {} };
+}
+
+/** [{num, title}] in service order: the saved order's songs, else the schedule's. */
+function teamServiceSongs_(svc, order) {
+  const view = order && order.view;
+  if (view && Array.isArray(view.items)) {
+    return view.items.filter((it) => it && it.song && (it.title || it.num))
+      .map((it) => ({ num: String(it.num || ''), title: String(it.title || '') }));
+  }
+  return svc.items.filter((it) => TEAM_SONG_ROLE.test(it.role) && String(it.value || '').trim()).map((it) => {
+    const t = String(it.value).trim().replace(/^\*?\s*new\s*\*?\s*/i, '');   // "43 Rejoice the Lord Is King", "*New* ..."
+    const m = /^(\d{1,4})\.?\s*(.*)$/.exec(t);
+    return { num: m ? m[1] : '', title: (m ? m[2] : t).trim() };
+  });
+}
+
+/** The songs with a PDF each, in the feed's song format, marked auto with the song's library key. */
+function teamAutoSongs_(lines, ctx) {
+  const out = [];
+  lines.forEach((line) => {
+    const row = teamOrderRow_(line, ctx.rows);
+    const title = line.title || (row ? row.title : '');
+    if (!title) return;
+    const key = teamKeyWords_(teamAllWords_(title));
+    const song = row ? row.id : 't:' + key.join(' ');
+    let file = null, pages = null;
+    const pick = String(ctx.picks[row ? row.id : 't:' + teamAllWords_(title).join(' ')] || '').split('|');
+    if (pick[0] && ctx.index[pick[0]] && teamShows_(ctx.index[pick[0]])) {
+      file = ctx.index[pick[0]];
+      pages = pick[1] ? pick[1].split(',').map(Number) : null;
+    } else {
+      file = teamBestPdf_(song, key, ctx);
+    }
+    if (!file) return;
+    out.push({ title: title, file: file.id, pages: pages, name: file.name, modified: file.modified || '', size: file.size || 0,
+      auto: true, song: song });
+  });
+  return out;
+}
+
+/** The Songs tab row for an order's song: by title or other name, else by hymn number when the titles agree. */
+function teamOrderRow_(line, rows) {
+  const t = teamAllWords_(line.title).join(' ');
+  const named = t ? rows.filter((s) => [s.title].concat(s.other ? s.other.split(/\s*;\s*/) : [])
+    .some((n) => teamAllWords_(n).join(' ') === t)) : [];
+  if (named.length) return named.filter((s) => s.num === line.num)[0] || named[0];
+  const byNum = line.num ? rows.filter((s) => s.num === line.num)[0] : null;
+  if (!byNum) return null;
+  if (!t) return byNum;
+  const a = teamKeyWords_(teamAllWords_(line.title)), b = teamKeyWords_(teamAllWords_(byNum.title));
+  const shared = a.filter((w) => b.indexOf(w) >= 0).length;
+  return shared >= 2 && shared / Math.max(a.length, b.length) >= 0.6 ? byNum : null;
+}
+
+/** The best PDF for a song (its library key), or null. */
+function teamBestPdf_(song, key, ctx) {
+  if (!key.length) return null;
+  // Only PDFs that share a word with the title can belong to it; the library's own match decides which do.
+  const words = {};
+  key.forEach((w) => { words[w] = true; });
+  if (song.charAt(0) !== 't') {
+    const row = ctx.rows.filter((s) => s.id === song)[0];
+    [row.title].concat(row.other ? row.other.split(/\s*;\s*/) : [])
+      .forEach((n) => teamKeyWords_(teamAllWords_(n)).forEach((w) => { words[w] = true; }));
+  }
+  const mine = ctx.files.filter((f) => {
+    if (String(f.folder || '').split(' / ')[0] !== TEAM_CONGREGATIONAL) return false;   // not choir or special arrangements
+    if (!teamKeyWords_(teamAllWords_(teamPdfTitle_(f.name))).some((w) => words[w])) return false;
+    if (!(f.id in ctx.owners)) {
+      const own = teamRowFor_(f.name, ctx.names);
+      ctx.owners[f.id] = own.row ? own.row.id : 't:' + own.key.join(' ');
+    }
+    return ctx.owners[f.id] === song;
+  });
+  mine.sort((a, b) => teamAutoRank_(b) - teamAutoRank_(a) || String(b.modified).localeCompare(String(a.modified)));
+  return mine[0] || null;
+}
+
+/** Higher is a better PDF for the congregation's song. */
+function teamAutoRank_(f) {
+  const name = String(f.name).replace(/\.pdf$/i, '');
+  let score = 0;
+  if (/4 ?part|\bhymn/i.test(name)) score += 40;
+  if (/lead|guitar|chord|piano|vocal|satb|ttbb|\bssa\b|trumpet|trombone|violin|cello|flute|string/i.test(name)) score -= 30;
+  if (!teamKeyFromName_(name)) score += 10;          // no key in the name: the song's original key
+  return score - name.split('_').length;             // "Living Hope_CCLI-C_4 Part" before "..._4 Part_Abbreviated"
+}
+
+// ---------- Playlists made on the team iPads ----------
+// Kept in Script Properties as "playlist|<id>", one JSON value each (9 KB at most).
+
+const TEAM_PLAYLIST_PREFIX = 'playlist|';
+const TEAM_PLAYLIST_SONGS = 60;
+
+/** Every playlist, A to Z. */
+function teamPlaylists_(props) {
+  return Object.keys(props).filter((k) => k.indexOf(TEAM_PLAYLIST_PREFIX) === 0).map((k) => {
+    try { return JSON.parse(props[k]); } catch (err) { return null; }
+  }).filter(Boolean).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
+/**
+ * POST {action: 'teamPlaylist', key, playlist: {id, name, items: [{file, title, pages}]}}
+ * saves a playlist made on a team iPad (every iPad gets it at its next sync);
+ * {action: 'teamPlaylist', key, id, remove: true} deletes one. Answers with every playlist.
+ */
+function teamPlaylist_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    if (body.remove) {
+      const id = String(body.id || '');
+      if (/^[\w-]{6,40}$/.test(id)) props.deleteProperty(TEAM_PLAYLIST_PREFIX + id);
+    } else {
+      const p = body.playlist || {};
+      const id = String(p.id || '');
+      if (!/^[\w-]{6,40}$/.test(id)) throw new Error('That playlist couldn’t be saved. Try again.');
+      const shown = {};
+      pdfIndex_(false).filter(teamShows_).forEach((f) => { shown[f.id] = true; });
+      const items = (Array.isArray(p.items) ? p.items : []).map((it) => {
+        const pages = Array.isArray(it && it.pages) ? it.pages.map(Number).filter((n) => n >= 1 && n <= 999 && n % 1 === 0).slice(0, 99) : [];
+        return { file: String((it && it.file) || ''), title: String((it && it.title) || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+          pages: pages.length ? pages : null };
+      }).filter((it) => shown[it.file]);
+      if (items.length > TEAM_PLAYLIST_SONGS) throw new Error('A playlist can have ' + TEAM_PLAYLIST_SONGS + ' songs at most.');
+      const json = JSON.stringify({ id: id, name: String(p.name || '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'Playlist',
+        items: items, updated: new Date().toISOString() });
+      if (json.length > 9000) throw new Error('That playlist is too long to save. Split it into two.');
+      props.setProperty(TEAM_PLAYLIST_PREFIX + id, json);
+    }
+    return { status: 'ok', playlists: teamPlaylists_(props.getProperties()) };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /** The order of service PDFs for a day: the musicians' copy when there is one, else the regular one. */
@@ -881,8 +1045,30 @@ function teamSongs_(body) {
   const cache = CacheService.getScriptCache();
   const refresh = !!body.refresh && !cache.get('teamReread');
   if (refresh) cache.put('teamReread', '1', TEAM_REREAD_SECONDS);
+  const rows = teamSongRows_();
+  const m = teamSongNames_(rows);
+  const keys = pdfKeys_();
+  const files = pdfIndex_(refresh).filter(teamShows_).map((f) => {
+    const nameKey = teamKeyFromName_(f.name);
+    const own = teamRowFor_(f.name, m);
+    return { id: f.id, name: f.name, folder: f.folder, size: f.size, modified: f.modified,
+      song: own.row ? own.row.id : 't:' + (own.key.join(' ') || f.id), title: own.row ? own.row.title : own.title,
+      key: keys[f.id] || nameKey, original: !nameKey && !!keys[f.id] };
+  });
+  return {
+    status: 'ok', updated: new Date().toISOString(), files: files,
+    songs: rows.map((s) => ({ id: s.id, num: s.num, title: s.title, other: s.other, category: s.cat, removed: s.removed })),
+  };
+}
+
+/** The Songs tab's songs that have a title and an ID. */
+function teamSongRows_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SONGS_SHEET);
-  const rows = sheet ? readSongs_(sheet).filter((s) => s.title && s.id) : [];
+  return sheet ? readSongs_(sheet).filter((s) => s.title && s.id) : [];
+}
+
+/** Every title and other name on the Songs tab, ready for teamRowFor_. */
+function teamSongNames_(rows) {
   const names = [];
   rows.forEach((s) => {
     [s.title].concat(s.other ? s.other.split(/\s*;\s*/) : []).forEach((n) => {
@@ -892,25 +1078,20 @@ function teamSongs_(body) {
   });
   const exact = {};
   names.forEach((n) => { const k = n.key.join(' '); if (k && !(k in exact)) exact[k] = n.s; });
-  const keys = pdfKeys_();
-  const files = pdfIndex_(refresh).filter(teamShows_).map((f) => {
-    const title = teamPdfTitle_(f.name);
-    const nameKey = teamKeyFromName_(f.name);
-    const all = teamAllWords_(title);
-    const key = teamKeyWords_(all);
-    let row = exact[key.join(' ')] || null;
-    if (!row && key.length) {
-      let best = 0;
-      names.forEach((n) => { const sc = teamScore_(n, all, key); if (sc > best) { best = sc; row = n.s; } });
-    }
-    return { id: f.id, name: f.name, folder: f.folder, size: f.size, modified: f.modified,
-      song: row ? row.id : 't:' + (key.join(' ') || f.id), title: row ? row.title : title,
-      key: keys[f.id] || nameKey, original: !nameKey && !!keys[f.id] };
-  });
-  return {
-    status: 'ok', updated: new Date().toISOString(), files: files,
-    songs: rows.map((s) => ({ id: s.id, num: s.num, title: s.title, other: s.other, category: s.cat, removed: s.removed })),
-  };
+  return { names: names, exact: exact };
+}
+
+/** The Songs tab song a PDF belongs to (row, or null), with the title read from its name and that title's key words. */
+function teamRowFor_(fileName, m) {
+  const title = teamPdfTitle_(fileName);
+  const all = teamAllWords_(title);
+  const key = teamKeyWords_(all);
+  let row = m.exact[key.join(' ')] || null;
+  if (!row && key.length) {
+    let best = 0;
+    m.names.forEach((n) => { const sc = teamScore_(n, all, key); if (sc > best) { best = sc; row = n.s; } });
+  }
+  return { row: row, title: title, key: key };
 }
 
 /** The PDF Keys tab: Drive file id -> key, for PDFs whose names don't say. */
