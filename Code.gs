@@ -1057,15 +1057,19 @@ function teamSongs_(body) {
   const refresh = !!body.refresh && !cache.get('teamReread');
   if (refresh) cache.put('teamReread', '1', TEAM_REREAD_SECONDS);
   // The iPads ask every few minutes with the stamp of the list they have: nothing to send when Song PDFs hasn't changed.
-  const stamp = cache.get(PDF_INDEX_STAMP);
-  if (!refresh && body.since && stamp && String(body.since) === stamp) return { status: 'ok', same: true, stamp: stamp };
+  const since = String(body.since || '');
+  if (!refresh && since && since === teamStamp_(cache)) return { status: 'ok', same: true, stamp: since };
+  const index = pdfIndex_(refresh);
+  // The six-hour listing had run out and was read again: still nothing to send if it came out the same.
+  const stamp = teamStamp_(cache);
+  if (!refresh && since && since === stamp) return { status: 'ok', same: true, stamp: stamp };
   const rows = teamSongRows_();
   const m = teamSongNames_(rows);
   const keys = pdfKeys_();
   const songOf = teamSongOf_(PropertiesService.getScriptProperties().getProperties());
-  const files = pdfIndex_(refresh).filter(teamShows_).map((f) => teamLibraryFile_(f, m, keys, songOf));
+  const files = index.filter(teamShows_).map((f) => teamLibraryFile_(f, m, keys, songOf));
   return {
-    status: 'ok', updated: new Date().toISOString(), files: files, stamp: cache.get(PDF_INDEX_STAMP) || '',
+    status: 'ok', updated: new Date().toISOString(), files: files, stamp: stamp,
     songs: rows.map((s) => ({ id: s.id, num: s.num, title: s.title, other: s.other, category: s.cat, removed: s.removed })),
   };
 }
@@ -1488,8 +1492,52 @@ function cacheIndex_(files) {
   let n = 0;
   for (let i = 0; i < json.length; i += size) parts[PDF_INDEX_KEY + n++] = json.slice(i, i + size);
   parts[PDF_INDEX_KEY] = String(n);
-  parts[PDF_INDEX_STAMP] = String(Date.now());   // changes whenever the list does (teamSongs_ "since")
+  // The same for the same list, however often it's read again (teamSongs_ "since"), so the
+  // iPads only fetch the song list when a PDF was added, changed, moved or removed.
+  parts[PDF_INDEX_STAMP] = digest_(JSON.stringify(files.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))));
   CacheService.getScriptCache().putAll(parts, PDF_INDEX_SECONDS);
+}
+
+/** A short fingerprint of some text: the same text always gives the same one. */
+function digest_(text) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, text, Utilities.Charset.UTF_8)
+    .map((b) => ('0' + ((b + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
+// ---------- Keeping the iPads' song list fresh ----------
+// Without this, a PDF added or replaced in Drive (or a change on the Songs or PDF Keys
+// tab) reaches the iPads only when the six-hour listing runs out. refreshSongLibrary
+// runs every 10 minutes from a trigger (setupSongRefresh, run once): it reads Song PDFs
+// again and fingerprints the two tabs, and the iPads' check every two minutes picks up
+// the difference.
+
+const TEAM_SHEETS_STAMP = 'teamSheetsStamp';   // fingerprint of the Songs and PDF Keys tabs, in the script cache
+const TEAM_REFRESH_MINUTES = 10;
+
+/** What the iPads send back as "since": changes when Song PDFs, the Songs tab or the PDF Keys tab does. '' when unknown. */
+function teamStamp_(cache) {
+  const got = cache.getAll([PDF_INDEX_STAMP, TEAM_SHEETS_STAMP]);
+  return got[PDF_INDEX_STAMP] ? got[PDF_INDEX_STAMP] + '-' + (got[TEAM_SHEETS_STAMP] || '') : '';
+}
+
+/** Run by the trigger. A failed run (Drive busy) leaves the list as it was; the next run tries again. */
+function refreshSongLibrary() {
+  try {
+    pdfIndex_(true);
+    CacheService.getScriptCache().put(TEAM_SHEETS_STAMP, digest_(JSON.stringify([teamSongRows_(), pdfKeys_()])), PDF_INDEX_SECONDS);
+  } catch (err) {
+    console.error('refreshSongLibrary: ' + err.message);
+  }
+}
+
+/** Run once from the editor: turns on the 10-minute refresh. Running it again replaces the trigger, never adds a second. */
+function setupSongRefresh() {
+  ScriptApp.getProjectTriggers().forEach((t) => {
+    if (t.getHandlerFunction() === 'refreshSongLibrary') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('refreshSongLibrary').timeBased().everyMinutes(TEAM_REFRESH_MINUTES).create();
+  refreshSongLibrary();
+  console.log('Song PDFs are now read again every ' + TEAM_REFRESH_MINUTES + ' minutes.');
 }
 
 /**
