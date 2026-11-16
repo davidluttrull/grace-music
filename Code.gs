@@ -265,6 +265,10 @@ function doPost(e) {
     if (body && body.action === 'teamSongs') return json_(teamSongs_(body));
     if (body && body.action === 'teamPlaylist') return json_(teamPlaylist_(body));
     if (body && body.action === 'teamUpload') return json_(teamUpload_(body));
+    if (body && body.action === 'teamMarks') return json_(teamMarks_(body));
+    if (body && body.action === 'teamMarkGet') return json_(teamMarkGet_(body));
+    if (body && body.action === 'teamMarkPut') return json_(teamMarkPut_(body));
+    if (body && body.action === 'teamPerson') return json_(teamPerson_(body));
     if (!underRateLimit_()) {
       return json_({ status: 'error', message: 'The schedule is busy right now. Try again in a few minutes.' });
     }
@@ -980,6 +984,184 @@ function teamPlaylist_(body) {
       props.setProperty(TEAM_PLAYLIST_PREFIX + id, json);
     }
     return { status: 'ok', playlists: teamPlaylists_(props.getProperties()) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------- Pencil marks, shared between the iPads ----------
+// Each page of a song PDF can carry marks in layers: "team" (everyone sees it)
+// and one per person ("p-dave-luttrull"), which follows that person to whichever
+// iPad they pick up. A page's marks for one layer are one small file in the Drive
+// folder "Grace Music Pencil Marks"; the Pencil Marks tab lists them, each with a
+// number (rev) that goes up with every save, so an iPad can ask "what's new since
+// 41?". The script never reads the drawings: they're PencilKit data.
+
+const MARKS_SHEET = 'Pencil Marks';
+const MARKS_FOLDER_NAME = 'Grace Music Pencil Marks';
+const MARKS_FOLDER_PROP = 'MARKS_FOLDER';
+const MARKS_REV = 'marksRev';             // the newest save's number
+const MARKS_PEOPLE = 'marksPeople';       // [{id, name}], the names the iPads offer
+const MARKS_MAX_CHARS = 1500000;          // one page's marks; a heavily marked page is about 100,000
+const MARKS_MAX_PEOPLE = 60;
+const MARKS_GET_AT_ONCE = 20;
+const MARKS_LAYER = /^(team|p-[a-z0-9]+(-[a-z0-9]+)*)$/;
+const MARKS_FILE = /^[\w-]{10,80}$/;
+
+function marksPeople_(props) {
+  try {
+    const list = JSON.parse(props.getProperty(MARKS_PEOPLE) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch (err) { return []; }
+}
+
+/** Which page's marks a request is about, checked. */
+function marksKey_(it) {
+  const layer = String((it && it.layer) || '');
+  const file = String((it && it.file) || '');
+  const page = Number(it && it.page);
+  if (layer.length > 43 || !MARKS_LAYER.test(layer) || !MARKS_FILE.test(file) || !(page >= 1 && page <= 999 && page % 1 === 0)) {
+    throw new Error('Those marks couldn’t be read. Try again.');
+  }
+  return { layer: layer, file: file, page: page };
+}
+
+function marksSheet_(create) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(MARKS_SHEET);
+  if (!sheet && create) {
+    sheet = ss.insertSheet(MARKS_SHEET, ss.getNumSheets());
+    sheet.getRange(1, 1, 1, 7).setValues([['Layer', 'PDF', 'Page', 'Rev', 'Drive file', 'Saved', 'iPad']]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/** The Pencil Marks tab: [{row, layer, file, page, rev, drive}]. */
+function marksRows_(sheet) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues().map((r, i) => (
+    { row: i + 2, layer: String(r[0]), file: String(r[1]), page: Number(r[2]), rev: Number(r[3]), drive: String(r[4]) }
+  )).filter((r) => r.layer && r.file);
+}
+
+function marksFolder_(props) {
+  const id = props.getProperty(MARKS_FOLDER_PROP);
+  if (id) {
+    try {
+      const kept = DriveApp.getFolderById(id);
+      if (!kept.isTrashed()) return kept;
+    } catch (err) { /* gone: make another */ }
+  }
+  const folder = DriveApp.createFolder(MARKS_FOLDER_NAME);
+  props.setProperty(MARKS_FOLDER_PROP, folder.getId());
+  return folder;
+}
+
+function marksRead_(driveId) {
+  try { return DriveApp.getFileById(driveId).getBlob().getDataAsString(); } catch (err) { return null; }
+}
+
+/**
+ * POST {action: 'teamMarks', key, layers: {team: 41, 'p-dave-luttrull': 0}}: what has
+ * been saved in those layers since each number. Answers { rev, people, changes:
+ * [{layer, file, page, rev}] }; the iPad keeps rev as its new number for each layer.
+ */
+function teamMarks_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const props = PropertiesService.getScriptProperties();
+  const rev = Number(props.getProperty(MARKS_REV) || 0);
+  const asked = body.layers && typeof body.layers === 'object' ? body.layers : {};
+  const since = {};
+  Object.keys(asked).filter((l) => l.length <= 43 && MARKS_LAYER.test(l)).slice(0, 5).forEach((l) => {
+    const n = Number(asked[l]) || 0;
+    since[l] = n > rev ? 0 : n;     // a number from before the marks were started over
+  });
+  const changes = [];
+  if (Object.keys(since).some((l) => since[l] < rev)) {
+    marksRows_(marksSheet_(false)).forEach((r) => {
+      if (since[r.layer] !== undefined && r.rev > since[r.layer]) changes.push({ layer: r.layer, file: r.file, page: r.page, rev: r.rev });
+    });
+  }
+  return { status: 'ok', rev: rev, people: marksPeople_(props), changes: changes };
+}
+
+/** POST {action: 'teamMarkGet', key, items: [{layer, file, page}]}: those pages' marks, { marks: [{layer, file, page, rev, data}] }. */
+function teamMarkGet_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const wanted = (Array.isArray(body.items) ? body.items : []).slice(0, MARKS_GET_AT_ONCE).map(marksKey_);
+  const rows = marksRows_(marksSheet_(false));
+  const marks = [];
+  wanted.forEach((w) => {
+    const r = rows.filter((x) => x.layer === w.layer && x.file === w.file && x.page === w.page)[0];
+    const data = r ? marksRead_(r.drive) : null;
+    if (data !== null) marks.push({ layer: w.layer, file: w.file, page: w.page, rev: r.rev, data: data });
+  });
+  return { status: 'ok', marks: marks };
+}
+
+/**
+ * POST {action: 'teamMarkPut', key, layer, file, page, data, base, device}: saves a
+ * page's marks. base is the rev the iPad last had for that page (0 if none). If
+ * another iPad saved since, nothing is written and the answer is { conflict: true,
+ * rev, data } with what's there now: the iPad adds its strokes to that and sends
+ * again. Otherwise { rev } is the save's number.
+ */
+function teamMarkPut_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const k = marksKey_(body);
+  const data = String(body.data || '');
+  if (data.charAt(0) !== '{' || data.length > MARKS_MAX_CHARS) throw new Error('Those marks are too big to share.');
+  const base = Number(body.base) || 0;
+  const device = String(body.device || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sheet = marksSheet_(true);
+    const row = marksRows_(sheet).filter((x) => x.layer === k.layer && x.file === k.file && x.page === k.page)[0];
+    const there = row ? marksRead_(row.drive) : null;
+    if (row && there !== null && row.rev !== base) return { status: 'ok', conflict: true, rev: row.rev, data: there };
+    let drive = row && there !== null ? row.drive : '';
+    if (drive) {
+      DriveApp.getFileById(drive).setContent(data);
+    } else {
+      drive = marksFolder_(props).createFile(k.layer + '_' + k.file + '_' + k.page + '.json', data, 'application/json').getId();
+    }
+    const rev = Number(props.getProperty(MARKS_REV) || 0) + 1;
+    const values = [k.layer, k.file, k.page, rev, drive, new Date(), device];
+    if (row) sheet.getRange(row.row, 1, 1, values.length).setValues([values]);
+    else sheet.appendRow(values);
+    props.setProperty(MARKS_REV, String(rev));
+    return { status: 'ok', rev: rev };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** POST {action: 'teamPerson', key, name}: adds a name the iPads offer for "whose marks". Answers { people, id }. */
+function teamPerson_(body) {
+  const refused = checkTeamKey_(body.key);
+  if (refused) return refused;
+  const name = String(body.name || '').replace(/[^A-Za-z0-9 .'’-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!slug) throw new Error('Type a name first.');
+  const id = 'p-' + slug;
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const people = marksPeople_(props);
+    if (!people.some((p) => p.id === id)) {
+      if (people.length >= MARKS_MAX_PEOPLE) throw new Error('The list of names is full. Ask David to clear it out.');
+      people.push({ id: id, name: name });
+      people.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      props.setProperty(MARKS_PEOPLE, JSON.stringify(people));
+    }
+    return { status: 'ok', people: people, id: id };
   } finally {
     lock.releaseLock();
   }
