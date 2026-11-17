@@ -98,6 +98,23 @@ For quick changes away from a computer, open **davidluttrull.github.io/grace-mus
 
 When `Code.gs` changes, paste the new version into Apps Script and save, then reload the Sheet. That's all the menu and the Songs tab need. If the change touches anything the web pages or the email helper use (the volunteer page, the builder, Save PDF, the song packet page, or the schedule editor), also click **Deploy → Manage deployments**, click the pencil icon, choose **New version** under Version, and click **Deploy**. Don't use **New deployment**, because that creates a new URL and the pages and the email helper would stop reaching the script. (If that ever happens, put the new URL in all four places listed in step 3.)
 
+### Code.gs from the Mac
+
+`scripts/deploy.sh` does the paste and the new version in one step. It uses Google's `clasp` tool, run through Deno, so the Mac needs Deno and nothing else.
+
+Setting it up (one time on each Mac):
+
+1. Open script.google.com/home/usersettings with the account that owns the Sheet and turn on **Google Apps Script API**.
+2. In Terminal, in the `Music Schedule` folder, run `scripts/clasp.sh login` and sign in with that same account. The sign-in is kept in `~/.clasprc.json` on this Mac. Anyone who can read that file can change the script, so don't copy it anywhere.
+3. In the Apps Script editor, open **Project Settings** and copy the **Script ID**. Save it in a file named `.clasp.json` in this folder: `{"scriptId": "the ID", "fileExtension": "gs"}`. That file is in `.gitignore` and stays off GitHub.
+4. Get the project's settings file once: run `scripts/clasp.sh pull` in an empty folder that has a copy of `.clasp.json`, then copy `appsscript.json` from there into this folder. If the pull brings down any file other than `Code.gs` and `appsscript.json`, stop: a push would delete it from the project.
+
+After that:
+
+- `scripts/deploy.sh` runs the checks in `tests/`, sends `Code.gs` and deploys a new version to the same address. If a check fails, nothing is sent. `EmailHelper.gs` belongs to another project and is never sent.
+- `PUSH_ONLY=1 scripts/deploy.sh` sends `Code.gs` without a new version. That's enough for a change to the Sheet's menus.
+- `deno run --allow-read tests/all.js` runs the checks alone.
+
 ## Turning on "I'll be out" (one time)
 
 1. Paste the new `Code.gs` into Apps Script and save.
